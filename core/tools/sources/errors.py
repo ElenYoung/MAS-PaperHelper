@@ -1,0 +1,2 @@
+class SourceFetchError(RuntimeError):
+    pass

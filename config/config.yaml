@@ -1,0 +1,172 @@
+# Global runtime settings.
+global:
+  # LLM provider type. Recommended values: openai or ollama.
+  llm_provider: ${MAS_LLM_PROVIDER:-openai}
+  # Main generation model name.
+  base_model: ${MAS_BASE_MODEL:-Qwen/Qwen3-Next-80B-A3B-Instruct}
+  # Embedding model name.
+  embedding_model: ${MAS_EMBEDDING_MODEL:-Qwen/Qwen3-Embedding-8B}
+  # API base for generation model endpoint.
+  base_model_api_base: ${MAS_BASE_MODEL_API_BASE:-http://127.0.0.1:8000/v1}
+  # API base for embedding model endpoint.
+  embedding_api_base: ${MAS_EMBEDDING_API_BASE:-http://127.0.0.1:8001/v1}
+  # Max concurrent workflow tasks.
+  max_concurrent_tasks: ${MAS_MAX_CONCURRENT_TASKS:-3}
+  # Candidate score threshold.
+  ranking_threshold: ${MAS_RANKING_THRESHOLD:-4.0}
+  # Minimum relevance ratio threshold.
+  min_relevance_ratio: ${MAS_MIN_RELEVANCE_RATIO:-0.2}
+  # Keep papers within this many recent days.
+  recency_window_days: ${MAS_RECENCY_WINDOW_DAYS:-60}
+  # Summary language: zh or en.
+  summary_language: ${MAS_SUMMARY_LANGUAGE:-zh}
+  # Max chars for each summary field.
+  summary_max_chars: ${MAS_SUMMARY_MAX_CHARS:-1000}
+  # Max number of summary items returned.
+  summary_limit: ${MAS_SUMMARY_LIMIT:-8}
+  # Fetch count per source.
+  discovery_limit_per_source: ${MAS_DISCOVERY_LIMIT_PER_SOURCE:-10}
+  # Use LLM summary generation.
+  use_llm_summary: ${MAS_USE_LLM_SUMMARY:-false}
+  # Optional unified API base fallback.
+  llm_api_base: ${MAS_LLM_API_BASE:-}
+  # Env var name for API key lookup.
+  llm_api_key_env: ${MAS_LLM_API_KEY_ENV:-OPENAI_API_KEY}
+  # Parser backend: pypdf/marker/docling.
+  parser_backend: ${MAS_PARSER_BACKEND:-pypdf}
+  # Max parsed pages per PDF.
+  parser_max_pages: ${MAS_PARSER_MAX_PAGES:-20}
+  # Enable cross-encoder rerank.
+  use_cross_encoder: ${MAS_USE_CROSS_ENCODER:-false}
+  # Cross-encoder model name.
+  cross_encoder_model: ${MAS_CROSS_ENCODER_MODEL:-cross-encoder/ms-marco-MiniLM-L-6-v2}
+  # Enable auto query from interests.
+  auto_query_from_interests: ${MAS_AUTO_QUERY_FROM_INTERESTS:-true}
+  # Query mode: manual/interests/merge.
+  auto_query_mode: ${MAS_AUTO_QUERY_MODE:-interests}
+  # Source query templates.
+  source_query_templates:
+    # arXiv query template.
+    arxiv: '{query}'
+    # Semantic Scholar query template.
+    semantic_scholar: '{query}'
+    # Google Scholar query template.
+    google_scholar: '{query} research paper'
+    # bioRxiv/medRxiv RSS query template.
+    biorxiv_medrxiv_rss: '{query}'
+  # Enable keyword KB expansion.
+  keyword_kb_enabled: ${MAS_KEYWORD_KB_ENABLED:-true}
+  # Keyword KB path.
+  keyword_kb_path: ${MAS_KEYWORD_KB_PATH:-data/keyword_kb.json}
+  # Expanded interests count limit.
+  keyword_expand_limit: ${MAS_KEYWORD_EXPAND_LIMIT:-5}
+  # Max newly learned terms per run.
+  keyword_max_new_terms_per_run: ${MAS_KEYWORD_MAX_NEW_TERMS_PER_RUN:-10}
+  # Terms always kept in expanded interests.
+  keyword_whitelist:
+    - quantitative trading
+    - market microstructure
+    - factor risk
+    - reinforcement learning
+    - deep learning
+  # Terms excluded from learning/expansion.
+  keyword_blacklist:
+    - does
+    - while
+    - both
+    - not
+
+# Database backend settings.
+database:
+  # Database backend type.
+  backend: ${MAS_DB_BACKEND:-sqlite}
+  # SQLite file path.
+  sqlite_path: ${MAS_SQLITE_PATH:-data/app.db}
+  # ClickHouse DSN.
+  clickhouse_dsn: ${MAS_CLICKHOUSE_DSN:-}
+
+# Vector store settings.
+vector_store:
+  # Vector backend type.
+  backend: ${MAS_VECTOR_BACKEND:-none}
+  # Local Chroma path.
+  chroma_path: ${MAS_CHROMA_PATH:-data/vector_db}
+
+# Data source settings.
+sources:
+  # arXiv connector settings.
+  arxiv:
+    # Whether source is enabled.
+    enabled: ${MAS_ARXIV_ENABLED:-true}
+    # Source priority (lower is earlier).
+    priority: ${MAS_ARXIV_PRIORITY:-1}
+    # Rate limit per minute.
+    rate_limit_per_min: ${MAS_ARXIV_RATE_LIMIT_PER_MIN:-30}
+    # Request timeout seconds.
+    timeout_seconds: ${MAS_ARXIV_TIMEOUT_SECONDS:-20}
+    # Retry times.
+    retry: ${MAS_ARXIV_RETRY:-2}
+
+  # Semantic Scholar connector settings.
+  semantic_scholar:
+    # Whether source is enabled.
+    enabled: ${MAS_SEMANTIC_SCHOLAR_ENABLED:-true}
+    # Source priority (lower is earlier).
+    priority: ${MAS_SEMANTIC_SCHOLAR_PRIORITY:-2}
+    # Rate limit per minute.
+    rate_limit_per_min: ${MAS_SEMANTIC_SCHOLAR_RATE_LIMIT_PER_MIN:-20}
+    # Request timeout seconds.
+    timeout_seconds: ${MAS_SEMANTIC_SCHOLAR_TIMEOUT_SECONDS:-20}
+    # Retry times.
+    retry: ${MAS_SEMANTIC_SCHOLAR_RETRY:-2}
+
+  # bioRxiv/medRxiv RSS connector settings.
+  biorxiv_medrxiv_rss:
+    # Whether source is enabled.
+    enabled: ${MAS_BIORXIV_MEDRXIV_RSS_ENABLED:-false}
+    # Source priority (lower is earlier).
+    priority: ${MAS_BIORXIV_MEDRXIV_RSS_PRIORITY:-3}
+    # Rate limit per minute.
+    rate_limit_per_min: ${MAS_BIORXIV_MEDRXIV_RSS_RATE_LIMIT_PER_MIN:-10}
+    # Request timeout seconds.
+    timeout_seconds: ${MAS_BIORXIV_MEDRXIV_RSS_TIMEOUT_SECONDS:-15}
+    # Retry times.
+    retry: ${MAS_BIORXIV_MEDRXIV_RSS_RETRY:-1}
+
+  # Google Scholar connector settings.
+  google_scholar:
+    # Whether source is enabled.
+    enabled: ${MAS_GOOGLE_SCHOLAR_ENABLED:-true}
+    # Source priority (lower is earlier).
+    priority: ${MAS_GOOGLE_SCHOLAR_PRIORITY:-4}
+    # Rate limit per minute.
+    rate_limit_per_min: ${MAS_GOOGLE_SCHOLAR_RATE_LIMIT_PER_MIN:-3}
+    # Request timeout seconds.
+    timeout_seconds: ${MAS_GOOGLE_SCHOLAR_TIMEOUT_SECONDS:-20}
+    # Retry times.
+    retry: ${MAS_GOOGLE_SCHOLAR_RETRY:-1}
+
+# User profiles.
+users:
+  # User profile definition.
+  - user_id: ${MAS_USER_ID:-quant}
+    # User research interests.
+    interests:
+      - Market Microstructure
+      - High Frequency Trading
+      - Reinforcement Learning in Finance
+    # Manual query text (empty means auto query from interests).
+    search_query: ''
+    # Schedule frequency: hourly/daily/weekly.
+    update_frequency: daily
+    # Source list enabled for this user.
+    enabled_sources:
+      - arxiv
+      - semantic_scholar
+      - google_scholar
+    # Ranking weight coefficients.
+    ranking_weights:
+      recency: 0.4
+      relevance: 0.6
+    # Optional per-user API key (prefer env-based global key).
+    llm_api_key: null

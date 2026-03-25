@@ -1,0 +1,1091 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MAS-PaperHelper</title>
+    <style>
+      /* 默认亮色主题 (Light Mode) */
+      :root {
+        --bg-grad-1: #f8fafc;
+        --bg-grad-2: #e2e8f0;
+        --card-bg: rgba(255, 255, 255, 0.85);
+        --card-border: rgba(99, 102, 241, 0.2);
+        --text-main: #1e293b;
+        --text-muted: #64748b;
+        --accent-primary: #4f46e5;
+        --accent-secondary: #7c3aed;
+        --btn-grad: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+        --btn-hover-shadow: rgba(139, 92, 246, 0.3);
+        --input-bg: rgba(255, 255, 255, 0.9);
+        --table-hover: rgba(0, 0, 0, 0.03);
+        --history-border: rgba(0, 0, 0, 0.08);
+        --summary-bg: rgba(255, 255, 255, 0.6);
+        --badge-active-bg: rgba(16, 185, 129, 0.1);
+        --badge-active-border: rgba(16, 185, 129, 0.3);
+        --badge-active-color: #059669;
+        --badge-inactive-bg: rgba(0, 0, 0, 0.05);
+        --badge-inactive-border: rgba(0, 0, 0, 0.1);
+        --badge-inactive-color: #64748b;
+        --title-color: #1e293b;
+        --empty-bg: rgba(0, 0, 0, 0.03);
+        --nav-border: transparent;
+      }
+
+      /* 暗色主题 (Dark Mode) */
+      [data-theme="dark"] {
+        --bg-grad-1: #0B0E14;
+        --bg-grad-2: #161224;
+        --card-bg: rgba(26, 26, 46, 0.6);
+        --card-border: rgba(138, 92, 246, 0.25);
+        --text-main: #f8fafc;
+        --text-muted: #94a3b8;
+        --accent-primary: #818cf8;
+        --accent-secondary: #c084fc;
+        --btn-grad: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+        --btn-hover-shadow: rgba(139, 92, 246, 0.4);
+        --input-bg: rgba(15, 15, 25, 0.8);
+        --table-hover: rgba(255, 255, 255, 0.03);
+        --history-border: rgba(255, 255, 255, 0.08);
+        --summary-bg: rgba(0, 0, 0, 0.2);
+        --badge-active-bg: rgba(16, 185, 129, 0.15);
+        --badge-active-border: rgba(16, 185, 129, 0.3);
+        --badge-active-color: #34d399;
+        --badge-inactive-bg: rgba(255, 255, 255, 0.05);
+        --badge-inactive-border: rgba(255, 255, 255, 0.1);
+        --badge-inactive-color: #94a3b8;
+        --title-color: #ffffff;
+        --empty-bg: rgba(0, 0, 0, 0.2);
+      }
+      
+      body {
+        margin: 0;
+        padding: 0;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        background: linear-gradient(145deg, var(--bg-grad-1) 0%, var(--bg-grad-2) 100%);
+        background-attachment: fixed;
+        color: var(--text-main);
+        line-height: 1.6;
+        font-size: 15px;
+        min-height: 100vh;
+        transition: background 0.3s ease, color 0.3s ease;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      .container {
+        max-width: 900px;
+        margin: 0 auto;
+        padding: 60px 20px;
+        position: relative;
+      }
+
+      /* 主题切换开关 */
+      .theme-switch-wrapper {
+        position: absolute;
+        top: 20px;
+        right: 20px;
+        display: flex;
+        align-items: center;
+        z-index: 100;
+      }
+      .theme-switch {
+        display: inline-block;
+        height: 28px;
+        position: relative;
+        width: 50px;
+      }
+      .theme-switch input {
+        display: none;
+      }
+      .slider {
+        background-color: #ccc;
+        bottom: 0;
+        cursor: pointer;
+        left: 0;
+        position: absolute;
+        right: 0;
+        top: 0;
+        transition: .4s;
+      }
+      .slider:before {
+        background-color: #fff;
+        bottom: 4px;
+        content: "";
+        height: 20px;
+        left: 4px;
+        position: absolute;
+        transition: .4s;
+        width: 20px;
+      }
+      input:checked + .slider {
+        background-color: var(--accent-secondary);
+      }
+      input:checked + .slider:before {
+        transform: translateX(22px);
+      }
+      .slider.round {
+        border-radius: 28px;
+      }
+      .slider.round:before {
+        border-radius: 50%;
+      }
+      .theme-icon {
+        margin: 0 8px;
+        font-size: 14px;
+        color: var(--text-muted);
+      }
+
+      header {
+        text-align: center;
+        margin-bottom: 30px;
+        margin-top: 20px;
+      }
+
+      h1 {
+        font-size: 2.8rem;
+        font-weight: 700;
+        margin: 0 0 10px 0;
+        background: linear-gradient(to right, var(--accent-primary), var(--accent-secondary));
+        background-clip: text;
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        letter-spacing: -0.5px;
+      }
+
+      .subtitle {
+        color: var(--text-muted);
+        font-size: 1.1rem;
+        margin: 0;
+        font-weight: 300;
+        letter-spacing: 0.5px;
+      }
+
+      /* 导航栏 (Tab Menu) */
+      .top-nav {
+        display: flex;
+        justify-content: center;
+        gap: 10px;
+        margin-bottom: 30px;
+        border-bottom: 1px solid var(--history-border);
+        padding-bottom: 10px;
+      }
+      .nav-item {
+        background: transparent;
+        color: var(--text-muted);
+        border: none;
+        border-bottom: 3px solid transparent;
+        border-radius: 0;
+        padding: 10px 20px;
+        font-size: 1.05rem;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        box-shadow: none;
+        outline: none;
+      }
+      .nav-item:hover {
+        color: var(--title-color);
+        transform: none;
+        box-shadow: none;
+        background: transparent;
+      }
+      .nav-item.active {
+        color: var(--accent-primary);
+        border-bottom: 3px solid var(--accent-primary);
+      }
+
+      /* 页面内容块 */
+      .page-tab {
+        display: none;
+        animation: fadeIn 0.4s ease forwards;
+      }
+      .page-tab.active {
+        display: block;
+      }
+      @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
+
+      h2 {
+        font-weight: 600;
+        color: var(--title-color);
+        font-size: 1.4rem;
+        margin-top: 0;
+        margin-bottom: 24px;
+        display: flex;
+        align-items: center;
+        transition: color 0.3s ease;
+      }
+      
+      h2::before {
+        content: "";
+        display: inline-block;
+        width: 4px;
+        height: 20px;
+        background: var(--accent-secondary);
+        margin-right: 12px;
+        border-radius: 2px;
+        box-shadow: 0 0 8px rgba(139, 92, 246, 0.4);
+      }
+
+      h3 {
+        font-weight: 500;
+        color: var(--accent-primary);
+        font-size: 1.2rem;
+        margin-top: 30px;
+        margin-bottom: 15px;
+      }
+
+      .section {
+        background: var(--card-bg);
+        border: 1px solid var(--card-border);
+        border-radius: 16px;
+        padding: 35px;
+        margin-bottom: 30px;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.05);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        transition: transform 0.3s ease, box-shadow 0.3s ease, background 0.3s ease, border-color 0.3s ease;
+      }
+
+      [data-theme="dark"] .section {
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+      }
+
+      .section:hover {
+        box-shadow: 0 12px 40px rgba(0, 0, 0, 0.1);
+        border-color: rgba(138, 92, 246, 0.3);
+      }
+      
+      [data-theme="dark"] .section:hover {
+        box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+        border-color: rgba(138, 92, 246, 0.5);
+      }
+
+      .row {
+        display: flex;
+        gap: 15px;
+        align-items: center;
+        flex-wrap: wrap;
+      }
+
+      .form-group {
+        margin-bottom: 20px;
+        width: 100%;
+      }
+
+      label {
+        display: block;
+        font-weight: 500;
+        margin-bottom: 8px;
+        color: var(--text-muted);
+        font-size: 0.95rem;
+        letter-spacing: 0.3px;
+      }
+
+      input[type="text"], 
+      select {
+        width: 100%;
+        padding: 12px 16px;
+        border: 1px solid var(--card-border);
+        border-radius: 8px;
+        background: var(--input-bg);
+        font-family: inherit;
+        font-size: 0.95rem;
+        color: var(--text-main);
+        transition: all 0.2s ease;
+      }
+
+      input[type="text"]:focus, 
+      select:focus {
+        outline: none;
+        border-color: var(--accent-primary);
+        box-shadow: 0 0 0 3px rgba(129, 140, 248, 0.2);
+      }
+      
+      select option {
+        background: var(--bg-grad-1);
+        color: var(--text-main);
+      }
+      
+      [data-theme="dark"] select option {
+        background: var(--bg-grad-2);
+      }
+
+      button {
+        background: var(--btn-grad);
+        color: #ffffff;
+        border: none;
+        padding: 12px 24px;
+        border-radius: 8px;
+        font-size: 0.95rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        font-family: inherit;
+        letter-spacing: 0.5px;
+        box-shadow: 0 4px 15px rgba(99, 102, 241, 0.3);
+      }
+
+      button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px var(--btn-hover-shadow);
+      }
+      
+      button.small {
+        padding: 6px 14px;
+        font-size: 0.85rem;
+        border-radius: 6px;
+        background: transparent;
+        color: var(--text-main);
+        border: 1px solid var(--card-border);
+        box-shadow: none;
+      }
+      
+      button.small:hover {
+        background: var(--history-border);
+        border-color: var(--accent-primary);
+        transform: none;
+        box-shadow: none;
+      }
+
+      .source-list {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+      }
+
+      .source-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 16px 0;
+        border-bottom: 1px solid var(--history-border);
+        flex-wrap: wrap;
+      }
+
+      .source-item:last-child {
+        border-bottom: none;
+      }
+
+      .source-info {
+        display: flex;
+        flex-direction: column;
+      }
+
+      .source-name {
+        font-weight: 600;
+        color: var(--text-main);
+        font-size: 1.05rem;
+        display: flex;
+        align-items: center;
+      }
+
+      .source-meta {
+        font-size: 0.85rem;
+        color: var(--text-muted);
+        margin-top: 6px;
+      }
+
+      .status-badge {
+        display: inline-block;
+        padding: 3px 10px;
+        border-radius: 20px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-left: 12px;
+      }
+
+      .status-active {
+        background: var(--badge-active-bg);
+        color: var(--badge-active-color);
+        border: 1px solid var(--badge-active-border);
+      }
+
+      .status-inactive {
+        background: var(--badge-inactive-bg);
+        color: var(--badge-inactive-color);
+        border: 1px solid var(--badge-inactive-border);
+      }
+
+      .summary-card {
+        border-left: 4px solid var(--accent-secondary);
+        padding: 20px 24px;
+        background: var(--summary-bg);
+        margin-bottom: 20px;
+        border-radius: 8px;
+        border-top: 1px solid var(--card-border);
+        border-right: 1px solid var(--card-border);
+        border-bottom: 1px solid var(--card-border);
+        transition: all 0.3s ease;
+      }
+
+      .summary-toggle {
+        cursor: pointer;
+        list-style: none;
+      }
+
+      .summary-toggle::-webkit-details-marker {
+        display: none;
+      }
+
+      .summary-toggle::after {
+        content: "Expand";
+        float: right;
+        font-size: 0.78rem;
+        color: var(--text-muted);
+        border: 1px solid var(--card-border);
+        border-radius: 999px;
+        padding: 2px 8px;
+      }
+
+      details[open] .summary-toggle::after {
+        content: "Collapse";
+      }
+      
+      .summary-card:hover {
+        border-color: rgba(192, 132, 252, 0.5);
+        box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+      }
+
+      .summary-title {
+        font-size: 1.15rem;
+        font-weight: 600;
+        color: var(--title-color);
+        margin: 0 0 10px 0;
+        line-height: 1.4;
+      }
+
+      .summary-meta {
+        font-size: 0.85rem;
+        color: var(--accent-primary);
+        margin-bottom: 16px;
+      }
+
+      .summary-details {
+        font-size: 0.95rem;
+        color: var(--text-muted);
+      }
+
+      .summary-details p {
+        margin: 10px 0;
+        color: var(--text-main);
+        word-wrap: break-word;
+      }
+
+      .abstract-preview {
+        margin-top: 8px;
+        color: var(--text-muted);
+        font-size: 0.92rem;
+        display: -webkit-box;
+        line-clamp: 2;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+      }
+      
+      .summary-label {
+        font-weight: 600;
+        color: var(--accent-primary);
+        font-size: 0.85rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-right: 6px;
+      }
+
+      .history-table {
+        width: 100%;
+        border-collapse: separate;
+        border-spacing: 0;
+        font-size: 0.9rem;
+      }
+
+      .history-table th, .history-table td {
+        padding: 14px 12px;
+        text-align: left;
+        border-bottom: 1px solid var(--history-border);
+        word-break: break-word;
+      }
+
+      .history-table th {
+        font-weight: 600;
+        color: var(--text-muted);
+        text-transform: uppercase;
+        font-size: 0.8rem;
+        letter-spacing: 0.5px;
+      }
+
+      .history-table tr:hover td {
+        background: var(--table-hover);
+      }
+
+      .empty-state {
+        text-align: center;
+        padding: 40px 20px;
+        color: var(--text-muted);
+        font-style: italic;
+        font-size: 0.95rem;
+        background: var(--empty-bg);
+        border-radius: 8px;
+      }
+
+      .inline-note {
+        margin-top: 8px;
+        font-size: 0.88rem;
+        color: var(--text-muted);
+      }
+
+      .query-box {
+        margin-bottom: 20px;
+        border: 1px solid var(--card-border);
+        background: var(--summary-bg);
+        border-radius: 10px;
+        padding: 14px 16px;
+      }
+
+      .query-box-title {
+        font-size: 0.85rem;
+        color: var(--text-muted);
+        margin-bottom: 6px;
+        text-transform: uppercase;
+        letter-spacing: 0.4px;
+      }
+
+      .query-box-content {
+        font-size: 0.95rem;
+        color: var(--title-color);
+        word-break: break-word;
+      }
+
+      .chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 10px;
+      }
+
+      .chip {
+        border: 1px solid var(--card-border);
+        background: var(--summary-bg);
+        color: var(--text-main);
+        padding: 4px 10px;
+        border-radius: 999px;
+        font-size: 0.82rem;
+      }
+      
+      .stats-bar {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 20px;
+        padding: 20px;
+        background: var(--summary-bg);
+        border: 1px solid var(--card-border);
+        border-radius: 12px;
+        margin-bottom: 30px;
+        transition: background 0.3s ease;
+      }
+      
+      .stat-item {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+      }
+      
+      .stat-item .label {
+        color: var(--text-muted);
+        font-size: 0.8rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-bottom: 6px;
+      }
+      
+      .stat-item .value {
+        font-size: 1.6rem;
+        font-weight: 700;
+        color: var(--accent-secondary);
+        background: linear-gradient(to right, var(--accent-primary), var(--accent-secondary));
+        background-clip: text;
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+      }
+
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      
+      <!-- 主题切换开关 -->
+      <div class="theme-switch-wrapper">
+        <span class="theme-icon">☀️</span>
+        <label class="theme-switch" for="checkbox">
+          <input type="checkbox" id="checkbox" />
+          <div class="slider round"></div>
+        </label>
+        <span class="theme-icon" style="margin-left:8px;">🌙</span>
+      </div>
+
+      <header>
+        <h1>MAS-PaperHelper</h1>
+        <p class="subtitle">Intelligent Literature Retrieval & Synthesis Engine</p>
+      </header>
+
+      <!-- 导航栏定义 3 个页面 -->
+      <nav class="top-nav">
+        <button class="nav-item active" data-target="page-config">配置页面 (Config)</button>
+        <button class="nav-item" data-target="page-results">结果视图 (Results)</button>
+        <button class="nav-item" data-target="page-logs">日志总览 (Logs)</button>
+      </nav>
+
+      <!-- 第一页：配置页面 -->
+      <div id="page-config" class="page-tab active">
+        <div class="section">
+          <h2>Execution Engine</h2>
+          <form class="row" method="post" action="/run">
+            <div style="flex-grow: 1;">
+              <select name="user_id" id="user_id">
+                {% for user in users %}
+                  <option value="{{ user }}">{{ user }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <button type="submit">Initialize Pipeline</button>
+          </form>
+        </div>
+
+        <div class="section">
+          <h2>Auto Query Strategy</h2>
+          <form method="post" action="/settings/query/update">
+            <input type="hidden" name="auto_query_from_interests" value="false" />
+            <div class="form-group">
+              <label style="display:flex; align-items:center; gap:10px; cursor:pointer;">
+                <input
+                  type="checkbox"
+                  name="auto_query_from_interests"
+                  value="true"
+                  {% if global_config.auto_query_from_interests %}checked{% endif %}
+                />
+                Enable auto query from user interests
+              </label>
+              <div class="inline-note">关闭后将只使用手写 search_query。</div>
+            </div>
+
+            <div class="form-group">
+              <label for="auto_query_mode">Auto Query Mode</label>
+              <select id="auto_query_mode" name="auto_query_mode">
+                <option value="merge" {% if global_config.auto_query_mode == "merge" %}selected{% endif %}>merge (手写 + 兴趣词合并)</option>
+                <option value="interests" {% if global_config.auto_query_mode == "interests" %}selected{% endif %}>interests (仅兴趣词)</option>
+                <option value="manual" {% if global_config.auto_query_mode == "manual" %}selected{% endif %}>manual (仅手写 search_query)</option>
+              </select>
+            </div>
+
+            <button type="submit">Save Query Strategy</button>
+          </form>
+        </div>
+
+        <div class="section">
+          <h2>Expanded Interests Control</h2>
+          <form method="post" action="/settings/keywords/update">
+            <input type="hidden" name="keyword_kb_enabled" value="false" />
+
+            <div class="form-group">
+              <label style="display:flex; align-items:center; gap:10px; cursor:pointer;">
+                <input
+                  type="checkbox"
+                  name="keyword_kb_enabled"
+                  value="true"
+                  {% if global_config.keyword_kb_enabled %}checked{% endif %}
+                />
+                Enable Expanded Interests learning
+              </label>
+              <div class="inline-note">Expanded Interests = 用户 interests + 白名单 + 关键词知识库学习项。</div>
+            </div>
+
+            <div class="form-group">
+              <label for="keyword_expand_limit">Expanded Interests Count</label>
+              <input
+                id="keyword_expand_limit"
+                name="keyword_expand_limit"
+                type="text"
+                value="{{ global_config.keyword_expand_limit }}"
+              />
+              <div class="inline-note">控制每轮最多展示/使用多少个 Expanded Interests。</div>
+            </div>
+
+            <div class="form-group">
+              <label for="keyword_max_new_terms_per_run">Max New Learned Terms Per Run</label>
+              <input
+                id="keyword_max_new_terms_per_run"
+                name="keyword_max_new_terms_per_run"
+                type="text"
+                value="{{ global_config.keyword_max_new_terms_per_run }}"
+              />
+            </div>
+
+            <div class="form-group">
+              <label for="recency_window_days">Recency Window (days)</label>
+              <input
+                id="recency_window_days"
+                name="recency_window_days"
+                type="text"
+                value="{{ global_config.recency_window_days }}"
+              />
+              <div class="inline-note">建议设为 60，表示保留最近两个月的论文。</div>
+            </div>
+
+            <div class="form-group">
+              <label for="summary_language">Research Problem/Innovation Language</label>
+              <select id="summary_language" name="summary_language">
+                <option value="en" {% if global_config.summary_language == "en" %}selected{% endif %}>English</option>
+                <option value="zh" {% if global_config.summary_language == "zh" %}selected{% endif %}>中文</option>
+              </select>
+              <div class="inline-note">建议启用 use_llm_summary=true 时使用该语言开关，效果更好。</div>
+            </div>
+
+            <div class="form-group">
+              <label for="summary_max_chars">Research Problem/Innovation Max Chars</label>
+              <input
+                id="summary_max_chars"
+                name="summary_max_chars"
+                type="text"
+                value="{{ global_config.summary_max_chars }}"
+              />
+              <div class="inline-note">用于限制单个字段长度，避免输出过长或混入无关段落。</div>
+            </div>
+
+            <div class="form-group">
+              <label for="keyword_whitelist_csv">Expanded Interests Whitelist (comma-separated)</label>
+              <input
+                id="keyword_whitelist_csv"
+                name="keyword_whitelist_csv"
+                type="text"
+                value="{{ global_config.keyword_whitelist | join(', ') }}"
+                placeholder="limit order book, market microstructure"
+              />
+              <div class="inline-note">白名单会被优先纳入 Expanded Interests。</div>
+            </div>
+
+            <div class="form-group">
+              <label for="keyword_blacklist_csv">Expanded Interests Blacklist (comma-separated)</label>
+              <input
+                id="keyword_blacklist_csv"
+                name="keyword_blacklist_csv"
+                type="text"
+                value="{{ global_config.keyword_blacklist | join(', ') }}"
+                placeholder="survey, tutorial"
+              />
+              <div class="inline-note">黑名单会从学习词与后续扩展中移除。</div>
+            </div>
+
+            <button type="submit">Save Expanded Interests Settings</button>
+          </form>
+        </div>
+
+        <div class="section">
+          <h2>Data Sources Configuration</h2>
+          <ul class="source-list">
+            {% for name, cfg in sources.items() %}
+              <li class="source-item">
+                <div class="source-info">
+                  <span class="source-name">{{ name }}
+                    <span class="status-badge {{ 'status-active' if cfg.enabled else 'status-inactive' }}">
+                      {{ 'Active' if cfg.enabled else 'Inactive' }}
+                    </span>
+                  </span>
+                  <span class="source-meta">Priority: {{ cfg.priority }} &bull; Rate Limit: {{ cfg.rate_limit_per_min }}/min</span>
+                </div>
+                <form method="post" action="/sources/toggle" style="margin: 0;">
+                  <input type="hidden" name="source_name" value="{{ name }}" />
+                  <input type="hidden" name="enabled" value="{{ 'false' if cfg.enabled else 'true' }}" />
+                  <button type="submit" class="small">{{ 'Disable' if cfg.enabled else 'Enable' }}</button>
+                </form>
+              </li>
+            {% endfor %}
+          </ul>
+        </div>
+
+        <div class="section">
+          <h2>User Profile Management</h2>
+          <form method="post" action="/users/update">
+            <div class="form-group">
+              <label for="edit_user_id">Select User Context</label>
+              <select name="user_id" id="edit_user_id">
+                {% for user in users %}
+                  <option value="{{ user }}">{{ user }}</option>
+                {% endfor %}
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label for="search_query">Semantic Search Query (可留空自动生成)</label>
+              <input id="search_query" name="search_query" type="text" placeholder="留空时将根据 interests 自动生成；或手写如 abs: 'order book' AND cat:cs.LG" />
+            </div>
+
+            <div class="form-group">
+              <label for="interests_csv">Research Trajectories (comma-separated)</label>
+              <input id="interests_csv" name="interests_csv" type="text" placeholder="Market Microstructure, Limit Order Book" />
+            </div>
+
+            <div class="form-group">
+              <label for="enabled_sources_csv">Target Providers (comma-separated)</label>
+              <input id="enabled_sources_csv" name="enabled_sources_csv" type="text" placeholder="arxiv, semantic_scholar" />
+            </div>
+
+            <div class="form-group">
+              <label for="update_frequency">Synchronization Cycle</label>
+              <select id="update_frequency" name="update_frequency">
+                <option value="hourly">Hourly</option>
+                <option value="daily" selected>Daily</option>
+                <option value="weekly">Weekly</option>
+              </select>
+            </div>
+
+            <button type="submit" style="margin-top: 10px;">Commit Parameters</button>
+          </form>
+        </div>
+      </div>
+
+      <!-- 第二页：结果论文展示页 -->
+      <div id="page-results" class="page-tab">
+        <div class="section">
+          <h2>Synthesized Output</h2>
+          {% if result %}
+            <div class="query-box">
+              <div class="query-box-title">Effective Query Used In This Run</div>
+              <div class="query-box-content">{{ result.effective_query or "(empty)" }}</div>
+              {% if result.expanded_interests %}
+                <div class="query-box-title" style="margin-top: 12px;">Expanded Interests</div>
+                <div class="chips">
+                  {% for term in result.expanded_interests %}
+                    <span class="chip">{{ term }}</span>
+                  {% endfor %}
+                </div>
+              {% endif %}
+              {% if result.related_domains %}
+                <div class="query-box-title" style="margin-top: 12px;">Related Domains</div>
+                <div class="chips">
+                  {% for item in result.related_domains %}
+                    <span class="chip">{{ item }}</span>
+                  {% endfor %}
+                </div>
+              {% endif %}
+            </div>
+
+            <div class="stats-bar">
+              <div class="stat-item">
+                <span class="label">User</span>
+                <span class="value" style="font-size: 1.2rem; padding-top: 5px;">{{ result.user_id }}</span>
+              </div>
+              <div class="stat-item">
+                <span class="label">Candidates Found</span>
+                <span class="value">{{ result.total_candidates }}</span>
+              </div>
+              <div class="stat-item">
+                <span class="label">Highly Relevant</span>
+                <span class="value">{{ result.kept_candidates }}</span>
+              </div>
+              <div class="stat-item">
+                <span class="label">Cutoff Score</span>
+                <span class="value">{{ result.threshold }}</span>
+              </div>
+            </div>
+
+            <h3>Extracted Literature Insights</h3>
+            {% if result.summaries %}
+              {% if result.grouped_summaries %}
+                {% for interest, items in result.grouped_summaries.items() %}
+                  <h3 style="margin-top: 16px;">Interest Group: {{ interest }} ({{ items|length }})</h3>
+                  <div class="summaries-container">
+                    {% for summary in items %}
+                      <details class="summary-card">
+                        <summary class="summary-toggle">
+                          <h4 class="summary-title">{{ summary.title }}</h4>
+                          <div class="summary-meta">
+                            Provider: {{ summary.source }} &bull; Confidence Score: {{ summary.score }}
+                            {% if summary.published_at %}&bull; Date: {{ summary.published_at }}{% endif %}
+                          </div>
+                          {% if summary.paper_url %}
+                            <div class="summary-meta">
+                              Link:
+                              <a href="{{ summary.paper_url }}" target="_blank" rel="noopener noreferrer">{{ summary.paper_url }}</a>
+                            </div>
+                          {% endif %}
+                          {% if summary.matched_interests %}
+                            <div class="chips" style="margin-top: 6px;">
+                              {% for tag in summary.matched_interests %}
+                                <span class="chip">{{ tag }}</span>
+                              {% endfor %}
+                            </div>
+                          {% endif %}
+                          <div class="abstract-preview">{{ summary.abstract }}</div>
+                        </summary>
+
+                        <div class="summary-details">
+                          <p><span class="summary-label">Abstract</span> {{ summary.abstract }}</p>
+                          <p><span class="summary-label">Research Problem</span> {{ summary.research_problem }}</p>
+                          <p><span class="summary-label">Innovation</span> {{ summary.innovation_summary }}</p>
+                        </div>
+                      </details>
+                    {% endfor %}
+                  </div>
+                {% endfor %}
+              {% else %}
+                <div class="summaries-container">
+                  {% for summary in result.summaries %}
+                    <details class="summary-card">
+                      <summary class="summary-toggle">
+                        <h4 class="summary-title">{{ summary.title }}</h4>
+                        <div class="summary-meta">
+                          Provider: {{ summary.source }} &bull; Confidence Score: {{ summary.score }}
+                          {% if summary.published_at %}&bull; Date: {{ summary.published_at }}{% endif %}
+                        </div>
+                        {% if summary.paper_url %}
+                          <div class="summary-meta">
+                            Link:
+                            <a href="{{ summary.paper_url }}" target="_blank" rel="noopener noreferrer">{{ summary.paper_url }}</a>
+                          </div>
+                        {% endif %}
+                        {% if summary.matched_interests %}
+                          <div class="chips" style="margin-top: 6px;">
+                            {% for tag in summary.matched_interests %}
+                              <span class="chip">{{ tag }}</span>
+                            {% endfor %}
+                          </div>
+                        {% endif %}
+                        <div class="abstract-preview">{{ summary.abstract }}</div>
+                      </summary>
+
+                      <div class="summary-details">
+                        <p><span class="summary-label">Abstract</span> {{ summary.abstract }}</p>
+                        <p><span class="summary-label">Research Problem</span> {{ summary.research_problem }}</p>
+                        <p><span class="summary-label">Innovation</span> {{ summary.innovation_summary }}</p>
+                      </div>
+                    </details>
+                  {% endfor %}
+                </div>
+              {% endif %}
+            {% else %}
+              <p class="empty-state">No candidates passed the relevance threshold criteria for this cycle.</p>
+            {% endif %}
+          {% else %}
+            <p class="empty-state">No active results available. Trigger the Execution Engine in the Config panel.</p>
+          {% endif %}
+        </div>
+      </div>
+
+      <!-- 第三页：日志页 -->
+      <div id="page-logs" class="page-tab">
+        <div class="section">
+          <h2>Execution Telemetry Log</h2>
+          {% if history %}
+            <div style="overflow-x: auto;">
+              <table class="history-table">
+                <thead>
+                  <tr>
+                    <th>Timestamp</th>
+                    <th>Ctx User</th>
+                    <th>Discovered</th>
+                    <th>Kept</th>
+                    <th>Threshold</th>
+                    <th>Summaries</th>
+                    <th>Providers</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for row in history %}
+                    <tr>
+                      <td>{{ row.created_at }}</td>
+                      <td>{{ row.user_id }}</td>
+                      <td>{{ row.total_candidates }}</td>
+                      <td>{{ row.kept_candidates }}</td>
+                      <td>{{ row.threshold }}</td>
+                      <td>{{ row.summary_count }}</td>
+                      <td>{{ row.sources_used }}</td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          {% else %}
+            <p class="empty-state">Telemetry datastore is currently empty.</p>
+          {% endif %}
+        </div>
+      </div>
+      
+    </div>
+
+    <!-- 交互逻辑：包括主题切换 与 Tab 分页路由切换 -->
+    <script>
+      // ===========================
+      // 1. 主题切换逻辑
+      // ===========================
+      const toggleSwitch = document.querySelector('.theme-switch input[type="checkbox"]');
+      const currentTheme = localStorage.getItem('theme');
+
+      if (currentTheme) {
+          document.documentElement.setAttribute('data-theme', currentTheme);
+          if (currentTheme === 'dark') {
+              toggleSwitch.checked = true;
+          }
+      } else {
+          if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+              document.documentElement.setAttribute('data-theme', 'dark');
+              toggleSwitch.checked = true;
+          }
+      }
+
+      function switchTheme(e) {
+          if (e.target.checked) {
+              document.documentElement.setAttribute('data-theme', 'dark');
+              localStorage.setItem('theme', 'dark');
+          } else {
+              document.documentElement.setAttribute('data-theme', 'light');
+              localStorage.setItem('theme', 'light');
+          }    
+      }
+      toggleSwitch.addEventListener('change', switchTheme, false);
+
+      // ===========================
+      // 2. 多页面/Tab 切换逻辑
+      // ===========================
+      const navItems = document.querySelectorAll('.nav-item');
+      const pageTabs = document.querySelectorAll('.page-tab');
+
+      // 切换Tab函数
+      function switchTab(targetId) {
+        // 移除所有的 active 状态
+        navItems.forEach(item => item.classList.remove('active'));
+        pageTabs.forEach(tab => tab.classList.remove('active'));
+
+        // 定位到选中的按钮和面板并激活
+        const targetBtn = document.querySelector(`.nav-item[data-target="${targetId}"]`);
+        const targetBlock = document.getElementById(targetId);
+        
+        if(targetBtn) targetBtn.classList.add('active');
+        if(targetBlock) targetBlock.classList.add('active');
+      }
+
+      // 绑定点击事件
+      navItems.forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          const targetId = e.currentTarget.getAttribute('data-target');
+          switchTab(targetId);
+        });
+      });
+
+      // ===========================
+      // 3. 智能路由：如果后端返回了结果，则直接跳到“结果页面”
+      // ===========================
+      {% if result %}
+        // 检测到结果对象注入，自动展示结果Tab
+        switchTab("page-results");
+      {% endif %}
+    </script>
+  </body>
+</html>

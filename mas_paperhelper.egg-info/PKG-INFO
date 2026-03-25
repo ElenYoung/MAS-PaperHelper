@@ -1,0 +1,91 @@
+Metadata-Version: 2.4
+Name: mas-paperhelper
+Version: 0.1.0
+Summary: Configurable multi-agent paper helper skeleton
+Requires-Python: >=3.12
+Description-Content-Type: text/markdown
+Requires-Dist: fastapi>=0.115.0
+Requires-Dist: uvicorn>=0.30.0
+Requires-Dist: jinja2>=3.1.4
+Requires-Dist: python-multipart>=0.0.9
+Requires-Dist: pydantic>=2.8.0
+Requires-Dist: pyyaml>=6.0.2
+Requires-Dist: httpx>=0.27.0
+Requires-Dist: feedparser>=6.0.11
+Requires-Dist: langgraph>=0.2.52
+Requires-Dist: pypdf>=5.4.0
+Provides-Extra: dev
+Requires-Dist: pytest>=8.3.0; extra == "dev"
+Requires-Dist: ruff>=0.6.0; extra == "dev"
+Provides-Extra: google
+Requires-Dist: scholarly>=1.7.11; extra == "google"
+Provides-Extra: vector
+Requires-Dist: chromadb>=0.5.23; extra == "vector"
+Provides-Extra: database
+Requires-Dist: clickhouse-connect>=0.8.15; extra == "database"
+Provides-Extra: rerank
+Requires-Dist: sentence-transformers>=3.2.1; extra == "rerank"
+
+# MAS-PaperHelper
+
+Runnable project skeleton with configurable data sources.
+
+## Quick Start
+
+1. Install base dependencies
+
+```bash
+uv sync --extra dev
+```
+
+Optional integrations:
+
+```bash
+uv sync --extra google --extra vector --extra database
+```
+
+2. Run one-shot workflow from CLI
+
+```bash
+uv run python scripts/main.py run-once --user-id quant_researcher_01
+```
+
+3. Start scheduler loop
+
+```bash
+uv run python scripts/main.py schedule --interval-seconds 300
+```
+
+4. Start web app
+
+```bash
+uv run uvicorn web.app:app --reload
+```
+
+Open http://127.0.0.1:8000
+
+## What is included
+
+- Multi-user configuration loading from config/config.yaml
+- Configurable source toggles and per-user source selection
+- Source registry with pluggable connectors
+- Real fetchers for arXiv, Semantic Scholar, and BioRxiv/MedRxiv RSS with fallback behavior
+- Optional Google Scholar connector (enabled by config + google extra)
+- Agent-based orchestration pipeline: Discovery Agent, Ranking Agent, Summary Agent
+- LangGraph state-machine execution for the agent pipeline
+- Node chain: Discovery -> Ranking -> Download&Parse -> Summary -> KB Update
+- Optional LLM-powered summary (Ollama/OpenAI-compatible) with safe fallback
+- Optional Cross-Encoder reranking with graceful fallback when dependency is unavailable
+- Configurable persistence backend (SQLite by default, optional ClickHouse)
+- Optional Chroma vector upsert for generated summaries
+- Parser backend switch (pypdf/marker/docling) with automatic fallback
+- Section-aware fallback summarization from parsed markdown headings
+- FastAPI dashboard with manual trigger endpoint
+- Web source toggles and run history panel
+- Scheduler respects per-user frequency (hourly/daily/weekly)
+- In-memory circuit breaker for per-source fault isolation and automatic cooldown
+
+## What is intentionally deferred
+
+- Marker/Docling environment bootstrapping scripts and GPU acceleration tuning
+- Deep section-level citation grounding and table/figure extraction in summaries
