@@ -1,14 +1,16 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any, TypedDict
 
 from langgraph.graph import END, START, StateGraph
 
-from core.agents.discovery_agent import DiscoveryAgent
+from core.agents.discovery_agent import DiscoveryAgent, _extract_arxiv_id
 from core.agents.ranking_agent import RankingAgent
 from core.agents.summary_agent import SummaryAgent
 from core.config import AppConfig, UserConfig
+from core.database.factory import create_repository
 from core.keyword_kb import KeywordKnowledgeBase
 from core.models import PaperCandidate, PaperSummary, WorkflowResult
 from core.tools.download import DownloadTool
@@ -21,6 +23,7 @@ class WorkflowState(TypedDict):
     app_config: AppConfig
     user: UserConfig
     source_registry: SourceRegistry
+    repository: Any
     limit_per_source: int
     ranking_threshold: float
     summary_limit: int
@@ -34,25 +37,84 @@ class WorkflowState(TypedDict):
     related_domains: list[str]
 
 
+def _normalize_phrase(value: str) -> str:
+    import re
+    lowered = value.strip().lower()
+    lowered = re.sub(r"\s+", " ", lowered)
+    return lowered
+
+
+def _merge_with_whitelist(
+    base_interests: list[str],
+    whitelist: list[str],
+    blacklist: list[str],
+    limit: int,
+) -> list[str]:
+    """Merge base interests with whitelist, prioritizing whitelist terms."""
+    deny = {_normalize_phrase(x) for x in blacklist if _normalize_phrase(x)}
+    allow = [x.strip() for x in whitelist if x.strip()]
+
+    merged: list[str] = []
+    seen: set[str] = set()
+
+    # Priority 1: Whitelist terms (these are explicitly configured)
+    for term in allow:
+        key = _normalize_phrase(term)
+        if not key or key in seen:
+            continue
+        if key in deny:
+            continue
+        merged.append(term)
+        seen.add(key)
+        if len(merged) >= limit:
+            return merged
+
+    # Priority 2: Base interests (user's explicit interests)
+    for term in base_interests:
+        key = _normalize_phrase(term)
+        if not key or key in seen:
+            continue
+        if key in deny:
+            continue
+        merged.append(term.strip())
+        seen.add(key)
+        if len(merged) >= limit:
+            return merged
+
+    return merged
+
+
 def compile_workflow_graph() -> Any:
     graph = StateGraph(WorkflowState)
 
     def discovery_node(state: WorkflowState) -> dict[str, Any]:
         runtime_user = state["user"]
-        expanded_interests = list(state["user"].interests)
+        base_interests = list(state["user"].interests)
+        whitelist = state["app_config"].global_config.keyword_whitelist or []
+        blacklist = state["app_config"].global_config.keyword_blacklist or []
+        expand_limit = state["app_config"].global_config.keyword_expand_limit
         related_domains: list[str] = []
+
+        # Always merge whitelist into expanded interests, regardless of kb enabled
+        expanded_interests = _merge_with_whitelist(
+            base_interests=base_interests,
+            whitelist=whitelist,
+            blacklist=blacklist,
+            limit=expand_limit,
+        )
 
         if state["app_config"].global_config.keyword_kb_enabled:
             kb = KeywordKnowledgeBase(path=state["app_config"].global_config.keyword_kb_path)
             expanded_interests = kb.expand_interests(
                 user_id=state["user"].user_id,
-                base_interests=state["user"].interests,
-                limit=state["app_config"].global_config.keyword_expand_limit,
-                whitelist=state["app_config"].global_config.keyword_whitelist,
-                blacklist=state["app_config"].global_config.keyword_blacklist,
+                base_interests=base_interests,
+                limit=expand_limit,
+                whitelist=whitelist,
+                blacklist=blacklist,
             )
             related_domains = kb.related_domains(user_id=state["user"].user_id)
-            runtime_user = state["user"].model_copy(update={"interests": expanded_interests})
+
+        runtime_user = state["user"].model_copy(update={"interests": expanded_interests})
 
         agent = DiscoveryAgent(source_registry=state["source_registry"])
         candidates, sources_used, effective_query = agent.run(
@@ -60,6 +122,31 @@ def compile_workflow_graph() -> Any:
             user=runtime_user,
             limit_per_source=state["limit_per_source"],
         )
+
+        repo = state.get("repository")
+        if repo:
+            seen = repo.get_seen_paper_ids(state["user"].user_id)
+            # Build normalized seen set for cross-source deduplication
+            seen_normalized: set[str] = set()
+            for pid in seen:
+                seen_normalized.add(pid)
+                # Also add standardized arXiv ID if extractable
+                if arxiv_id := _extract_arxiv_id(pid):
+                    seen_normalized.add(f"arxiv:{arxiv_id}")
+
+            # Filter candidates using both original and normalized ID
+            filtered_candidates: list[PaperCandidate] = []
+            for c in candidates:
+                # Check original ID
+                if c.paper_id and c.paper_id in seen_normalized:
+                    continue
+                # Check normalized arXiv ID
+                candidate_arxiv = _extract_arxiv_id(c.paper_id)
+                if candidate_arxiv and f"arxiv:{candidate_arxiv}" in seen_normalized:
+                    continue
+                filtered_candidates.append(c)
+            candidates = filtered_candidates
+
         return {
             "candidates": candidates,
             "sources_used": sources_used,
@@ -92,24 +179,34 @@ def compile_workflow_graph() -> Any:
         parser = ParseTool(
             backend=state["app_config"].global_config.parser_backend,
             max_pages=state["app_config"].global_config.parser_max_pages,
+            device=state["app_config"].global_config.parser_device,
         )
+        user_id = state["user"].user_id
+
+        def _process_one(paper: PaperCandidate) -> PaperCandidate:
+            # Try to download and parse PDF, but keep paper even if it fails
+            # SummaryAgent will fall back to abstract if needed
+            if paper.pdf_url:
+                downloaded = downloader.download_paper(user_id=user_id, paper=paper)
+                parsed_paper = parser.parse_to_markdown(user_id=user_id, paper=downloaded)
+                # Check if we got valid parsed content
+                if parsed_paper.markdown_path:
+                    try:
+                        markdown_text = Path(parsed_paper.markdown_path).read_text(encoding="utf-8")
+                        marker = "## Parsed Content"
+                        parsed_content = markdown_text.split(marker, 1)[1].strip() if marker in markdown_text else ""
+                        if parsed_content and not ParseTool.is_fallback_content(parsed_content):
+                            return parsed_paper  # Successfully parsed
+                    except Exception:
+                        pass
+            # Return paper as-is (will use abstract in summary)
+            return paper
+
+        max_workers = min(len(state["kept"]), state["app_config"].global_config.max_concurrent_tasks) or 1
         parsed: list[PaperCandidate] = []
-        for paper in state["kept"]:
-            downloaded = downloader.download_paper(user_id=state["user"].user_id, paper=paper)
-            parsed_paper = parser.parse_to_markdown(user_id=state["user"].user_id, paper=downloaded)
-            if not parsed_paper.markdown_path:
-                continue
-            try:
-                markdown_text = Path(parsed_paper.markdown_path).read_text(encoding="utf-8")
-                marker = "## Parsed Content"
-                parsed_content = markdown_text.split(marker, 1)[1].strip() if marker in markdown_text else ""
-            except Exception:
-                parsed_content = ""
-
-            if not parsed_content or ParseTool.is_fallback_content(parsed_content):
-                continue
-
-            parsed.append(parsed_paper)
+        with ThreadPoolExecutor(max_workers=max_workers) as pool:
+            for result in pool.map(_process_one, state["kept"]):
+                parsed.append(result)
         return {"kept": parsed}
 
     def kb_update_node(state: WorkflowState) -> dict[str, Any]:
@@ -132,6 +229,13 @@ def compile_workflow_graph() -> Any:
                 store.upsert_summaries(user_id=state["user"].user_id, summaries=state["summaries"])
             except Exception:
                 pass
+
+        repo = state.get("repository")
+        if repo:
+            repo.mark_papers_seen(state["user"].user_id, state["kept"])
+            if state["summaries"]:
+                repo.save_paper_summaries(state["user"].user_id, state["summaries"])
+
         return {"related_domains": related_domains}
 
     graph.add_node("discovery", discovery_node)
@@ -159,10 +263,12 @@ def run_graph_workflow(
     summary_limit: int = 3,
 ) -> WorkflowResult:
     app = compile_workflow_graph()
+    repository = create_repository(app_config)
     initial_state: WorkflowState = {
         "app_config": app_config,
         "user": user,
         "source_registry": source_registry,
+        "repository": repository,
         "limit_per_source": limit_per_source,
         "ranking_threshold": ranking_threshold,
         "summary_limit": summary_limit,
@@ -179,17 +285,39 @@ def run_graph_workflow(
     expanded_interests = final_state.get("expanded_interests", [])
     base_interests = list(user.interests)
     grouped_summaries: dict[str, list[PaperSummary]] = {}
-    matched_titles: set[str] = set()
+    assigned_titles: set[str] = set()
 
-    for interest in base_interests:
-        bucket = [s for s in final_state["summaries"] if interest in s.matched_interests]
-        if bucket:
-            grouped_summaries[interest] = bucket
-            matched_titles.update(item.title for item in bucket)
+    # Assign each summary to its best-matching interest only
+    for summary in final_state["summaries"]:
+        if not summary.matched_interests:
+            continue
+        # Use the first (best) matched interest as its primary group
+        primary = summary.matched_interests[0]
+        grouped_summaries.setdefault(primary, []).append(summary)
+        assigned_titles.add(summary.title)
 
-    others = [s for s in final_state["summaries"] if s.title not in matched_titles]
-    if others:
-        grouped_summaries["Other"] = others
+    # For any unassigned, try to find closest interest match
+    for summary in final_state["summaries"]:
+        if summary.title in assigned_titles:
+            continue
+        best_match = None
+        best_score = 0
+        text = f"{summary.title} {summary.abstract}".lower()
+        for interest in base_interests:
+            interest_lower = interest.lower()
+            if interest_lower in text:
+                score = len(interest_lower.split())
+            else:
+                words = set(interest_lower.split())
+                text_words = set(text.split())
+                score = len(words & text_words)
+            if score > best_score:
+                best_score = score
+                best_match = interest
+        if best_match:
+            grouped_summaries.setdefault(best_match, []).append(summary)
+        else:
+            grouped_summaries.setdefault("综合", []).append(summary)
 
     return WorkflowResult(
         user_id=user.user_id,

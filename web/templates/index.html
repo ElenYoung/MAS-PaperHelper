@@ -4,6 +4,20 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>MAS-PaperHelper</title>
+    <script>
+      MathJax = {
+        tex: {
+          inlineMath: [['$', '$'], ['\\(', '\\)']],
+          displayMath: [['$$', '$$'], ['\\[', '\\]']],
+          processEscapes: true,
+          processEnvironments: true
+        },
+        options: {
+          skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre']
+        }
+      };
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-chtml.min.js" async></script>
     <style>
       /* 默认亮色主题 (Light Mode) */
       :root {
@@ -535,6 +549,16 @@
         border-radius: 8px;
       }
 
+      .summary-label {
+        display: block;
+        font-weight: 600;
+        color: var(--accent-secondary);
+        margin-bottom: 6px;
+        font-size: 0.85rem;
+        text-transform: uppercase;
+        letter-spacing: 0.4px;
+      }
+
       .inline-note {
         margin-top: 8px;
         font-size: 0.88rem;
@@ -578,6 +602,147 @@
         border-radius: 999px;
         font-size: 0.82rem;
       }
+
+      /* 可折叠 Section 样式 */
+      .collapsible-section {
+        margin-bottom: 16px;
+      }
+
+      .section-toggle {
+        width: 100%;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 16px 20px;
+        background: linear-gradient(135deg, var(--accent-primary) 0%, var(--accent-secondary) 100%);
+        color: white;
+        border: none;
+        border-radius: 12px;
+        font-size: 1.1rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+      }
+
+      .section-toggle:hover {
+        box-shadow: 0 4px 12px var(--btn-hover-shadow);
+        transform: translateY(-1px);
+      }
+
+      .section-toggle:active {
+        transform: translateY(0);
+      }
+
+      .section-toggle::after {
+        content: "▼";
+        font-size: 0.8rem;
+        transition: transform 0.3s ease;
+        margin-left: 10px;
+      }
+
+      .section-toggle.collapsed::after {
+        transform: rotate(-90deg);
+      }
+
+      .section-content {
+        max-height: 2000px;
+        overflow: hidden;
+        transition: max-height 0.4s ease, padding 0.3s ease, opacity 0.3s ease;
+        opacity: 1;
+        padding: 20px;
+        background: var(--card-bg);
+        border: 1px solid var(--card-border);
+        border-top: none;
+        border-radius: 0 0 12px 12px;
+        backdrop-filter: blur(10px);
+      }
+
+      .section-content.collapsed {
+        max-height: 0;
+        padding: 0 20px;
+        opacity: 0;
+      }
+
+      .section-content .form-group:first-child {
+        margin-top: 0;
+      }
+
+      .section-content .form-group:last-child {
+        margin-bottom: 0;
+      }
+
+      /* 子折叠项样式 */
+      .sub-collapsible {
+        margin: 12px 0;
+        border: 1px solid var(--card-border);
+        border-radius: 8px;
+        overflow: hidden;
+      }
+
+      .sub-toggle {
+        width: 100%;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 12px 16px;
+        background: var(--summary-bg);
+        color: var(--text-main);
+        border: none;
+        font-size: 0.95rem;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.2s ease;
+      }
+
+      .sub-toggle:hover {
+        background: var(--table-hover);
+      }
+
+      .sub-toggle::after {
+        content: "▼";
+        font-size: 0.75rem;
+        transition: transform 0.3s ease;
+        color: var(--text-muted);
+      }
+
+      .sub-toggle.collapsed::after {
+        transform: rotate(-90deg);
+      }
+
+      .sub-content {
+        max-height: 1000px;
+        overflow: hidden;
+        transition: max-height 0.3s ease, padding 0.3s ease;
+        padding: 16px;
+        background: var(--card-bg);
+      }
+
+      .sub-content.collapsed {
+        max-height: 0;
+        padding: 0 16px;
+      }
+
+      .source-config-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+        gap: 12px;
+        margin-top: 12px;
+      }
+
+      .source-config-grid .form-group {
+        margin: 0;
+      }
+
+      .source-config-grid label {
+        font-size: 0.8rem;
+        margin-bottom: 4px;
+      }
+
+      .source-config-grid input {
+        padding: 8px;
+        font-size: 0.9rem;
+      }
       
       .stats-bar {
         display: grid;
@@ -619,6 +784,15 @@
     </style>
   </head>
   <body>
+    <!-- Loading Overlay -->
+    <div id="loading-overlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:9999; justify-content:center; align-items:center;">
+      <div style="background:var(--card-bg); border:1px solid var(--card-border); border-radius:16px; padding:40px 50px; text-align:center; backdrop-filter:blur(12px);">
+        <div style="width:40px; height:40px; border:4px solid var(--card-border); border-top-color:var(--accent-primary); border-radius:50%; animation:spin 1s linear infinite; margin:0 auto 20px;"></div>
+        <div style="color:var(--title-color); font-size:1.1rem; font-weight:600;">Pipeline Running...</div>
+        <div style="color:var(--text-muted); font-size:0.9rem; margin-top:8px;">正在搜集、排序、下载和解析论文，请稍候</div>
+      </div>
+    </div>
+    <style>@keyframes spin { to { transform: rotate(360deg); } }</style>
     <div class="container">
       
       <!-- 主题切换开关 -->
@@ -640,6 +814,7 @@
       <nav class="top-nav">
         <button class="nav-item active" data-target="page-config">配置页面 (Config)</button>
         <button class="nav-item" data-target="page-results">结果视图 (Results)</button>
+        <button class="nav-item" data-target="page-history">历史论文 (History)</button>
         <button class="nav-item" data-target="page-logs">日志总览 (Logs)</button>
       </nav>
 
@@ -647,7 +822,7 @@
       <div id="page-config" class="page-tab active">
         <div class="section">
           <h2>Execution Engine</h2>
-          <form class="row" method="post" action="/run">
+          <form class="row" id="run-form" onsubmit="return runPipeline(event)">
             <div style="flex-grow: 1;">
               <select name="user_id" id="user_id">
                 {% for user in users %}
@@ -655,8 +830,27 @@
                 {% endfor %}
               </select>
             </div>
-            <button type="submit">Initialize Pipeline</button>
+            <button type="submit" id="run-btn">Initialize Pipeline</button>
           </form>
+        </div>
+
+        <div class="section">
+          <h2>Auto Scheduler Control</h2>
+          <div class="form-group">
+            <div id="scheduler-status" style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;">
+              <span class="status-badge status-inactive" id="scheduler-status-badge">Stopped</span>
+              <span id="scheduler-last-run">Last run: never</span>
+            </div>
+            <div class="inline-note">
+              Scheduler automatically runs pipeline based on each user's "Synchronization Cycle" setting (hourly/daily/weekly).
+              Check interval: 5 minutes.
+            </div>
+          </div>
+          <div class="row" style="gap: 10px;">
+            <button type="button" id="scheduler-start-btn" onclick="toggleScheduler(true)" style="flex: 1;">Start Scheduler</button>
+            <button type="button" id="scheduler-stop-btn" onclick="toggleScheduler(false)" style="flex: 1;" disabled>Stop Scheduler</button>
+            <button type="button" id="scheduler-run-now-btn" onclick="schedulerRunNow()" style="flex: 1;">Run Now</button>
+          </div>
         </div>
 
         <div class="section">
@@ -788,6 +982,39 @@
         </div>
 
         <div class="section">
+          <h2>Expanded Interests Manager</h2>
+          <div class="form-group">
+            <label for="ei_manager_user_id">Select User</label>
+            <select id="ei_manager_user_id" onchange="loadExpandedInterests()">
+              {% for user in users %}
+                <option value="{{ user }}">{{ user }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label>Current Expanded Interests (<span id="ei-count">0</span> terms)</label>
+            <div id="ei-list" class="chips" style="min-height: 40px; padding: 10px; border: 1px solid var(--card-border); border-radius: 8px; background: var(--summary-bg);">
+              <span class="empty-state" style="padding: 10px;">Loading...</span>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label>Add New Term</label>
+            <div class="row" style="gap: 10px;">
+              <input type="text" id="ei-new-term" placeholder="Enter term (e.g., deep reinforcement learning)" style="flex: 1;" />
+              <input type="number" id="ei-new-score" placeholder="Score" value="1.0" step="0.1" min="0" max="10" style="width: 80px;" />
+              <button type="button" onclick="addExpandedInterest()">Add</button>
+            </div>
+          </div>
+
+          <div class="inline-note">
+            <strong>Tips:</strong> Higher score = higher priority. Terms are sorted by score descending.
+            Click the X on any chip to remove it. Changes are saved immediately.
+          </div>
+        </div>
+
+        <div class="section">
           <h2>Data Sources Configuration</h2>
           <ul class="source-list">
             {% for name, cfg in sources.items() %}
@@ -907,7 +1134,7 @@
                         <summary class="summary-toggle">
                           <h4 class="summary-title">{{ summary.title }}</h4>
                           <div class="summary-meta">
-                            Provider: {{ summary.source }} &bull; Confidence Score: {{ summary.score }}
+                            Provider: {{ summary.source }} &bull; <strong style="color: var(--accent-secondary);">Score: {{ summary.score }}</strong>
                             {% if summary.published_at %}&bull; Date: {{ summary.published_at }}{% endif %}
                           </div>
                           {% if summary.paper_url %}
@@ -923,13 +1150,13 @@
                               {% endfor %}
                             </div>
                           {% endif %}
-                          <div class="abstract-preview">{{ summary.abstract }}</div>
                         </summary>
 
                         <div class="summary-details">
+                          <p><span class="summary-label">Research Problem</span> {{ summary.research_problem or 'N/A' }}</p>
+                          <p><span class="summary-label">Innovation</span> {{ summary.innovation_summary or 'N/A' }}</p>
+                          <hr style="margin: 12px 0; border: none; border-top: 1px solid var(--card-border);">
                           <p><span class="summary-label">Abstract</span> {{ summary.abstract }}</p>
-                          <p><span class="summary-label">Research Problem</span> {{ summary.research_problem }}</p>
-                          <p><span class="summary-label">Innovation</span> {{ summary.innovation_summary }}</p>
                         </div>
                       </details>
                     {% endfor %}
@@ -942,7 +1169,7 @@
                       <summary class="summary-toggle">
                         <h4 class="summary-title">{{ summary.title }}</h4>
                         <div class="summary-meta">
-                          Provider: {{ summary.source }} &bull; Confidence Score: {{ summary.score }}
+                          Provider: {{ summary.source }} &bull; <strong style="color: var(--accent-secondary);">Score: {{ summary.score }}</strong>
                           {% if summary.published_at %}&bull; Date: {{ summary.published_at }}{% endif %}
                         </div>
                         {% if summary.paper_url %}
@@ -958,13 +1185,13 @@
                             {% endfor %}
                           </div>
                         {% endif %}
-                        <div class="abstract-preview">{{ summary.abstract }}</div>
                       </summary>
 
                       <div class="summary-details">
+                        <p><span class="summary-label">Research Problem</span> {{ summary.research_problem or 'N/A' }}</p>
+                        <p><span class="summary-label">Innovation</span> {{ summary.innovation_summary or 'N/A' }}</p>
+                        <hr style="margin: 12px 0; border: none; border-top: 1px solid var(--card-border);">
                         <p><span class="summary-label">Abstract</span> {{ summary.abstract }}</p>
-                        <p><span class="summary-label">Research Problem</span> {{ summary.research_problem }}</p>
-                        <p><span class="summary-label">Innovation</span> {{ summary.innovation_summary }}</p>
                       </div>
                     </details>
                   {% endfor %}
@@ -979,7 +1206,27 @@
         </div>
       </div>
 
-      <!-- 第三页：日志页 -->
+      <!-- 第三页：历史论文 -->
+      <div id="page-history" class="page-tab">
+        <div class="section">
+          <h2>历史论文检索 (Paper History)</h2>
+          <div class="row" style="margin-bottom: 20px;">
+            <input type="text" id="history-search" placeholder="搜索标题或摘要关键词..." style="flex:1;" />
+            <select id="history-user-filter" style="width:auto; min-width:120px;">
+              <option value="">所有用户</option>
+              {% for user in users %}
+                <option value="{{ user }}">{{ user }}</option>
+              {% endfor %}
+            </select>
+            <button onclick="searchHistory()">搜索</button>
+          </div>
+          <div id="history-results">
+            <p class="empty-state">输入关键词搜索历史论文，或直接点击搜索查看全部。</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- 第四页：日志页 -->
       <div id="page-logs" class="page-tab">
         <div class="section">
           <h2>Execution Telemetry Log</h2>
@@ -1080,12 +1327,237 @@
       });
 
       // ===========================
-      // 3. 智能路由：如果后端返回了结果，则直接跳到“结果页面”
+      // 3. 智能路由：如果后端返回了结果，则直接跳到”结果页面”
       // ===========================
       {% if result %}
-        // 检测到结果对象注入，自动展示结果Tab
-        switchTab("page-results");
+        switchTab(“page-results”);
       {% endif %}
+
+      // ===========================
+      // 4. 历史论文搜索
+      // ===========================
+      function searchHistory() {
+        const q = document.getElementById('history-search').value;
+        const userId = document.getElementById('history-user-filter').value;
+        const params = new URLSearchParams({q, user_id: userId, limit: '50'});
+        fetch('/api/history?' + params)
+          .then(r => r.json())
+          .then(data => {
+            const container = document.getElementById('history-results');
+            if (!data.length) {
+              container.innerHTML = '<p class=”empty-state”>未找到匹配的历史论文。</p>';
+              return;
+            }
+            container.innerHTML = data.map(p => `
+              <details class="summary-card">
+                <summary class="summary-toggle">
+                  <h4 class="summary-title">${p.title}</h4>
+                  <div class="summary-meta">
+                    Provider: ${p.source} &bull; <strong style="color: var(--accent-secondary);">Score: ${p.score}</strong>
+                    ${p.published_at ? '&bull; Date: ' + p.published_at : ''}
+                    &bull; 收录于: ${p.created_at}
+                  </div>
+                  ${p.paper_url ? `<div class="summary-meta">Link: <a href="${p.paper_url}" target="_blank" rel="noopener noreferrer">${p.paper_url}</a></div>` : ''}
+                  ${p.matched_interests ? `<div class="chips" style="margin-top:6px;">${p.matched_interests.split(',').map(t => `<span class="chip">${t.trim()}</span>`).join('')}</div>` : ''}
+                </summary>
+                <div class="summary-details">
+                  <p><span class="summary-label">Research Problem</span> ${p.research_problem || 'N/A'}</p>
+                  <p><span class="summary-label">Innovation</span> ${p.innovation_summary || 'N/A'}</p>
+                  <hr style="margin: 12px 0; border: none; border-top: 1px solid var(--card-border);">
+                  <p><span class="summary-label">Abstract</span> ${p.abstract || ''}</p>
+                </div>
+              </details>
+            `).join('');
+          });
+      }
+
+      document.getElementById('history-search').addEventListener('keydown', e => {
+        if (e.key === 'Enter') searchHistory();
+      });
+
+      // ===========================
+      // 5. Pipeline 异步执行 + Loading Overlay
+      // ===========================
+      function runPipeline(e) {
+        e.preventDefault();
+        const overlay = document.getElementById('loading-overlay');
+        overlay.style.display = 'flex';
+        document.getElementById('run-btn').disabled = true;
+        const userId = document.getElementById('user_id').value;
+        const body = new URLSearchParams({user_id: userId});
+        fetch('/api/run', {method: 'POST', body})
+          .then(r => r.json())
+          .then(data => {
+            overlay.style.display = 'none';
+            document.getElementById('run-btn').disabled = false;
+            renderResult(data);
+            switchTab('page-results');
+          })
+          .catch(() => {
+            overlay.style.display = 'none';
+            document.getElementById('run-btn').disabled = false;
+            alert('Pipeline 执行失败，请检查后端日志。');
+          });
+        return false;
+      }
+
+      function renderResult(r) {
+        const container = document.querySelector('#page-results .section');
+        let html = '<h2>Synthesized Output</h2>';
+        html += `<div class="query-box">
+          <div class="query-box-title">Effective Query Used In This Run</div>
+          <div class="query-box-content">${r.effective_query || '(empty)'}</div>`;
+        if (r.expanded_interests && r.expanded_interests.length) {
+          html += '<div class="query-box-title" style="margin-top:12px;">Expanded Interests</div><div class="chips">';
+          r.expanded_interests.forEach(t => html += `<span class="chip">${t}</span>`);
+          html += '</div>';
+        }
+        if (r.related_domains && r.related_domains.length) {
+          html += '<div class="query-box-title" style="margin-top:12px;">Related Domains</div><div class="chips">';
+          r.related_domains.forEach(t => html += `<span class="chip">${t}</span>`);
+          html += '</div>';
+        }
+        html += '</div>';
+        html += `<div class="stats-bar">
+          <div class="stat-item"><span class="label">User</span><span class="value" style="font-size:1.2rem;padding-top:5px;">${r.user_id}</span></div>
+          <div class="stat-item"><span class="label">Candidates Found</span><span class="value">${r.total_candidates}</span></div>
+          <div class="stat-item"><span class="label">Highly Relevant</span><span class="value">${r.kept_candidates}</span></div>
+          <div class="stat-item"><span class="label">Cutoff Score</span><span class="value">${r.threshold}</span></div>
+        </div>`;
+        html += '<h3>Extracted Literature Insights</h3>';
+        if (r.grouped_summaries && Object.keys(r.grouped_summaries).length) {
+          for (const [interest, items] of Object.entries(r.grouped_summaries)) {
+            html += `<h3 style="margin-top:16px;">Interest Group: ${interest} (${items.length})</h3>`;
+            html += items.map(s => summaryCard(s)).join('');
+          }
+        } else if (r.summaries && r.summaries.length) {
+          html += r.summaries.map(s => summaryCard(s)).join('');
+        } else {
+          html += '<p class="empty-state">No candidates passed the relevance threshold criteria for this cycle.</p>';
+        }
+        container.innerHTML = html;
+      }
+
+      function summaryCard(s) {
+        const interests = (s.matched_interests || []).map(t => `<span class="chip">${t}</span>`).join('');
+        const pub = s.published_at || '';
+        const link = s.paper_url ? `<div class="summary-meta">Link: <a href="${s.paper_url}" target="_blank" rel="noopener noreferrer">${s.paper_url}</a></div>` : '';
+        return `<details class="summary-card"><summary class="summary-toggle">
+          <h4 class="summary-title">${s.title}</h4>
+          <div class="summary-meta">Provider: ${s.source} &bull; <strong style="color: var(--accent-secondary);">Score: ${s.score}</strong>${pub ? ' &bull; Date: ' + pub : ''}</div>
+          ${link}
+          ${interests ? '<div class="chips" style="margin-top:6px;">' + interests + '</div>' : ''}
+        </summary><div class="summary-details">
+          <p><span class="summary-label">Research Problem</span> ${s.research_problem || 'N/A'}</p>
+          <p><span class="summary-label">Innovation</span> ${s.innovation_summary || 'N/A'}</p>
+          <hr style="margin: 12px 0; border: none; border-top: 1px solid var(--card-border);">
+          <p><span class="summary-label">Abstract</span> ${s.abstract || ''}</p>
+        </div></details>`;
+      }
+
+      // ===========================
+      // 6. Expanded Interests Manager
+      // ===========================
+      let currentExpandedInterests = [];
+
+      async function loadExpandedInterests() {
+        const userId = document.getElementById('ei_manager_user_id').value;
+        if (!userId) return;
+
+        try {
+          const response = await fetch(`/api/expanded-interests?user_id=${encodeURIComponent(userId)}`);
+          const data = await response.json();
+          currentExpandedInterests = data.terms || [];
+          renderExpandedInterests();
+        } catch (err) {
+          document.getElementById('ei-list').innerHTML = '<span class="empty-state" style="padding: 10px;">Failed to load. Please try again.</span>';
+        }
+      }
+
+      function renderExpandedInterests() {
+        const container = document.getElementById('ei-list');
+        const countEl = document.getElementById('ei-count');
+
+        countEl.textContent = currentExpandedInterests.length;
+
+        if (currentExpandedInterests.length === 0) {
+          container.innerHTML = '<span class="empty-state" style="padding: 10px;">No expanded interests yet. Add some terms below.</span>';
+          return;
+        }
+
+        container.innerHTML = currentExpandedInterests.map(item => `
+          <span class="chip" style="display: inline-flex; align-items: center; gap: 6px; cursor: default;">
+            ${item.term}
+            <span style="color: var(--text-muted); font-size: 0.75rem;">(${item.score.toFixed(2)})</span>
+            <button onclick="removeExpandedInterest('${item.term.replace(/'/g, "\\'")}')"
+                    style="background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 0.9rem; padding: 0; margin-left: 4px;">×</button>
+          </span>
+        `).join('');
+      }
+
+      async function addExpandedInterest() {
+        const userId = document.getElementById('ei_manager_user_id').value;
+        const termInput = document.getElementById('ei-new-term');
+        const scoreInput = document.getElementById('ei-new-score');
+        const term = termInput.value.trim();
+        const score = parseFloat(scoreInput.value) || 1.0;
+
+        if (!term) {
+          alert('Please enter a term');
+          return;
+        }
+
+        try {
+          const response = await fetch('/api/expanded-interests/add', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({ user_id: userId, term, score })
+          });
+
+          if (response.ok) {
+            termInput.value = '';
+            scoreInput.value = '1.0';
+            await loadExpandedInterests();
+          } else {
+            alert('Failed to add term');
+          }
+        } catch (err) {
+          alert('Error adding term: ' + err.message);
+        }
+      }
+
+      async function removeExpandedInterest(term) {
+        const userId = document.getElementById('ei_manager_user_id').value;
+        if (!confirm(`Remove "${term}" from expanded interests?`)) return;
+
+        try {
+          const response = await fetch('/api/expanded-interests/remove', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({ user_id: userId, term })
+          });
+
+          if (response.ok) {
+            await loadExpandedInterests();
+          } else {
+            alert('Failed to remove term');
+          }
+        } catch (err) {
+          alert('Error removing term: ' + err.message);
+        }
+      }
+
+      // Load expanded interests when page loads
+      document.addEventListener('DOMContentLoaded', () => {
+        if (document.getElementById('ei_manager_user_id')) {
+          loadExpandedInterests();
+        }
+      });
+
+      // Allow Enter key to add term
+      document.getElementById('ei-new-term')?.addEventListener('keydown', e => {
+        if (e.key === 'Enter') addExpandedInterest();
+      });
     </script>
   </body>
 </html>

@@ -22,9 +22,21 @@ class SummaryAgent(AgentBase):
         for paper in papers[:limit]:
             markdown_text = self._read_markdown(paper.markdown_path)
             parsed_content = self._extract_parsed_content(markdown_text)
-            if not parsed_content or ParseTool.is_fallback_content(parsed_content):
-                continue
             section_view = self._extract_section_view(parsed_content)
+
+            # Determine content source and quality
+            has_valid_content = parsed_content and not ParseTool.is_fallback_content(parsed_content)
+            is_pdf_available = bool(paper.pdf_url)
+
+            # Track if we're using abstract instead of full text
+            using_abstract_fallback = False
+
+            if not has_valid_content:
+                # Fall back to abstract when PDF unavailable or parsing failed
+                parsed_content = paper.abstract
+                section_view = {}
+                using_abstract_fallback = True
+
             llm_summary = None
             if self.global_config.use_llm_summary:
                 prompt = self._build_prompt(
@@ -32,37 +44,41 @@ class SummaryAgent(AgentBase):
                     paper=paper,
                     parsed_content=parsed_content,
                     section_view=section_view,
+                    using_abstract_fallback=using_abstract_fallback,
                 )
-                llm_summary = llm_client.generate_summary(prompt)
+                try:
+                    llm_summary = llm_client.generate_summary(prompt)
+                except Exception:
+                    llm_summary = None
 
             if llm_summary:
-                summaries.append(
-                    PaperSummary(
-                        title=paper.title,
-                        source=paper.source,
-                        score=paper.score,
-                        published_at=paper.published_at,
-                        paper_url=self._resolve_paper_url(paper),
-                        abstract=paper.abstract,
-                        research_problem=self._finalize_field(
-                            llm_summary["research_problem"],
-                            kind="problem",
-                            title=paper.title,
-                        ),
-                        innovation_summary=self._finalize_field(
-                            llm_summary["innovation_summary"],
-                            kind="innovation",
-                            title=paper.title,
-                        ),
-                        matched_interests=self._match_interest_tags(
-                            interests=user.interests,
-                            title=paper.title,
-                            abstract=paper.abstract,
-                            parsed_content=parsed_content,
-                        ),
-                    )
+                research_problem = self._finalize_field(
+                    llm_summary["research_problem"],
+                    kind="problem",
+                    title=paper.title,
                 )
-                continue
+                innovation_summary = self._finalize_field(
+                    llm_summary["innovation_summary"],
+                    kind="innovation",
+                    title=paper.title,
+                )
+            else:
+                # Fallback to rule-based extraction (from abstract or parsed content)
+                research_problem = self._finalize_field(
+                    self._fallback_research_problem(section_view=section_view, parsed_content=parsed_content),
+                    kind="problem",
+                    title=paper.title,
+                )
+                innovation_summary = self._finalize_field(
+                    self._fallback_innovation(section_view=section_view, parsed_content=parsed_content),
+                    kind="innovation",
+                    title=paper.title,
+                )
+
+            # Add indicator when using abstract fallback
+            if using_abstract_fallback and not llm_summary:
+                research_problem = "[Based on Abstract] " + research_problem if research_problem else "[Based on Abstract] Research problem extraction unavailable without full text."
+                innovation_summary = "[Based on Abstract] " + innovation_summary if innovation_summary else "[Based on Abstract] Innovation details unavailable without full text."
 
             summaries.append(
                 PaperSummary(
@@ -72,16 +88,8 @@ class SummaryAgent(AgentBase):
                     published_at=paper.published_at,
                     paper_url=self._resolve_paper_url(paper),
                     abstract=paper.abstract,
-                    research_problem=self._finalize_field(
-                        self._fallback_research_problem(section_view=section_view, parsed_content=parsed_content),
-                        kind="problem",
-                        title=paper.title,
-                    ),
-                    innovation_summary=self._finalize_field(
-                        self._fallback_innovation(section_view=section_view, parsed_content=parsed_content),
-                        kind="innovation",
-                        title=paper.title,
-                    ),
+                    research_problem=research_problem,
+                    innovation_summary=innovation_summary,
                     matched_interests=self._match_interest_tags(
                         interests=user.interests,
                         title=paper.title,
@@ -90,17 +98,6 @@ class SummaryAgent(AgentBase):
                     ),
                 )
             )
-
-            if summaries[-1].innovation_summary == summaries[-1].research_problem:
-                alt = self._pick_alternative_sentence(
-                    parsed_content=parsed_content,
-                    current=summaries[-1].research_problem,
-                )
-                summaries[-1].innovation_summary = self._finalize_field(
-                    alt,
-                    kind="innovation",
-                    title=paper.title,
-                )
         return summaries
 
     def _match_interest_tags(
@@ -156,9 +153,25 @@ class SummaryAgent(AgentBase):
         paper: PaperCandidate,
         parsed_content: str,
         section_view: dict[str, str],
+        using_abstract_fallback: bool = False,
     ) -> str:
         language = "Chinese" if self.global_config.summary_language == "zh" else "English"
         max_chars = max(80, int(self.global_config.summary_max_chars))
+
+        if using_abstract_fallback:
+            # When PDF is unavailable, explicitly tell LLM to use abstract only
+            return (
+                "You are a research assistant. NOTE: Full paper PDF is unavailable, "
+                "so you must base your analysis ONLY on the Abstract provided below. "
+                "Produce: (1) research_problem, (2) innovation_summary based on what can be "
+                "inferred from the abstract. Return strict JSON with keys research_problem, innovation_summary. "
+                "Keep each value concise, one paragraph, "
+                f"max {max_chars} characters, language={language}.\n\n"
+                f"User interests: {', '.join(user.interests)}\n"
+                f"Title: {paper.title}\n"
+                f"Abstract:\n{parsed_content}\n"
+            )
+
         return (
             "You are a research assistant. Use only parsed full-text content from the paper body, "
             "not the abstract, to produce: (1) research_problem, (2) innovation_summary. "

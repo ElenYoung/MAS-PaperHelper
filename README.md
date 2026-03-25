@@ -1,281 +1,234 @@
 # MAS-PaperHelper
 
-MAS-PaperHelper is a configurable multi-agent literature assistant for research workflows.
-It helps you:
+<p align="center">
+  <img src="https://img.shields.io/badge/Python-3.12+-blue.svg?style=flat-square" alt="Python 3.12+">
+  <img src="https://img.shields.io/badge/License-MIT-green.svg?style=flat-square" alt="License: MIT">
+  <img src="https://img.shields.io/badge/FastAPI-Web%20UI-orange.svg?style=flat-square" alt="FastAPI Web UI">
+</p>
 
-- Discover recent papers from multiple sources.
-- Rank papers by interest relevance and recency.
-- Download/parse PDFs into local markdown.
-- Generate structured fields like Research Problem and Innovation.
-- Persist workflow history and optionally vectorize summaries.
+<p align="center">
+  <b>多源学术文献智能发现与摘要系统</b><br>
+  <i>Multi-Agent System for Intelligent Paper Discovery & Summarization</i>
+</p>
 
-The project provides both CLI and Web UI usage, with most behavior controlled by `config/config.yaml`.
+---
 
-## Architecture Overview
+## 功能特性
 
-Core workflow (LangGraph):
+MAS-PaperHelper 是一个可配置的多智能体文献助手，帮助研究者高效追踪领域前沿：
 
-1. Discovery: fetch candidates from enabled sources.
-2. Ranking: compute relevance + recency and filter by thresholds.
-3. Download & Parse: fetch PDF and convert into markdown.
-4. Summary: generate structured summary fields.
-5. KB Update: update keyword knowledge base and optional vector store.
+| 模块 | 功能 |
+|------|------|
+| 🔍 **多源发现** | arXiv、Semantic Scholar、Google Scholar 等并行检索 |
+| 🎯 **智能排序** | 基于相关性与时效性的加权评分 |
+| 📄 **PDF 解析** | 自动下载并解析为结构化 Markdown |
+| 🤖 **AI 摘要** | 自动提取研究问题与创新点 |
+| 📚 **知识库** | 关键词学习与扩展兴趣管理 |
+| 🗃️ **历史归档** | 可搜索的论文历史数据库 |
+| ⏰ **定时任务** | 支持按小时/天/周自动执行 |
 
-Default node chain:
+---
 
-`Discovery -> Ranking -> Download&Parse -> Summary -> KB Update`
+## 快速开始
 
-## Features
+### 环境要求
 
-- Multi-user profile support in one config file.
-- Source-level controls (enable, priority, rate limit, timeout, retry).
-- Auto query generation from interests (`manual/interests/merge`).
-- Recency window filtering (for example, last 60 days).
-- Structured summary output with configurable language and max length.
-- Expanded interests / keyword learning with whitelist and blacklist.
-- Interest tags per paper + grouped display in UI.
-- Web controls for major settings and one-click run.
+- Python ≥ 3.12
+- [uv](https://docs.astral.sh/uv/) 包管理器
 
-## Environment Setup
-
-Python requirement:
-
-- Python `>=3.12`
-
-Install dependencies with `uv`:
+### 安装
 
 ```bash
+# 克隆仓库
+git clone <repository-url>
+cd MAS-PaperHelper
+
+# 创建虚拟环境
+uv venv --python 3.12
+
+# 安装依赖
 uv sync --extra dev
+
+# 可选组件（按需安装）
+uv sync --extra google      # Google Scholar 支持
+uv sync --extra vector      # 向量数据库支持
+uv sync --extra database    # ClickHouse 支持
 ```
 
-Optional extras:
+### 配置
 
 ```bash
-uv sync --extra google --extra vector --extra database --extra rerank
+cp config/config.yaml.example config/config.yaml
 ```
 
-- `google`: Google Scholar connector (`scholarly`)
-- `vector`: Chroma vector store
-- `database`: ClickHouse backend
-- `rerank`: Cross-encoder reranking
+编辑 `config/config.yaml`：
 
-## Project Structure
+```yaml
+# LLM 配置（二选一）
+global:
+  # 本地部署（推荐）
+  llm_provider: openai
+  base_model: Qwen/Qwen3-Next-80B-A3B-Instruct
+  base_model_api_base: http://127.0.0.1:8000/v1
 
-```text
-.
-├── config/
-│   └── config.yaml
-├── core/
-│   ├── agents/
-│   ├── tools/
-│   ├── database/
-│   ├── vector/
-│   └── ...
-├── scripts/
-│   └── main.py
-├── web/
-│   ├── app.py
-│   └── templates/
-├── data/
-│   ├── storage/
-│   ├── markdown/
-│   ├── keyword_kb.json
-│   └── app.db
-└── README.md
+  # 或商业 API
+  # llm_provider: openai
+  # base_model: gpt-4o-mini
+  # llm_api_key_env: OPENAI_API_KEY
+
+# PDF 解析器选择
+global:
+  # 💡 无 GPU 推荐使用 pypdf
+  parser_backend: pypdf
+
+  # 💡 有 NVIDIA GPU 推荐使用 docling 获得更好效果
+  # parser_backend: docling
+  # parser_device: cuda
+  # parser_max_pages: 15
 ```
 
-## Configuration Guide
+### 启动
 
-All runtime behavior is controlled by `config/config.yaml`.
-
-### 1) `global`
-
-Model and runtime controls:
-
-- `llm_provider`: `ollama` or `openai`
-- `base_model`, `embedding_model`
-- `base_model_api_base`, `embedding_api_base`
-- `llm_api_key_env`
-- `max_concurrent_tasks`
-
-Ranking/retrieval controls:
-
-- `ranking_threshold`: total score threshold
-- `min_relevance_ratio`: relevance floor
-- `recency_window_days`: only keep papers in this age window
-- `discovery_limit_per_source`: fetch count per source
-
-Summary controls:
-
-- `use_llm_summary`: whether LLM summarization is enabled
-- `summary_language`: `zh` or `en`
-- `summary_max_chars`: max chars for each summary field
-- `summary_limit`: number of summaries per run
-
-Parsing controls:
-
-- `parser_backend`: `pypdf` / `marker` / `docling`
-- `parser_max_pages`
-
-Query controls:
-
-- `auto_query_from_interests`
-- `auto_query_mode`: `manual` / `interests` / `merge`
-- `source_query_templates`
-
-Keyword KB controls:
-
-- `keyword_kb_enabled`
-- `keyword_kb_path`
-- `keyword_expand_limit`
-- `keyword_max_new_terms_per_run`
-- `keyword_whitelist`
-- `keyword_blacklist`
-
-### 2) `database`
-
-- `backend`: `sqlite` or `clickhouse`
-- `sqlite_path`
-- `clickhouse_dsn`
-
-### 3) `vector_store`
-
-- `backend`: `none` or vector backend
-- `chroma_path`
-
-### 4) `sources`
-
-Each source has:
-
-- `enabled`
-- `priority`
-- `rate_limit_per_min`
-- `timeout_seconds`
-- `retry`
-
-Supported source keys:
-
-- `arxiv`
-- `semantic_scholar`
-- `biorxiv_medrxiv_rss`
-- `google_scholar`
-
-### 5) `users`
-
-Each user profile supports:
-
-- `user_id`
-- `interests`
-- `search_query`
-- `update_frequency`: `hourly` / `daily` / `weekly`
-- `enabled_sources`
-- `ranking_weights.recency`
-- `ranking_weights.relevance`
-- `llm_api_key` (optional per-user key)
-
-## Usage Guide
-
-### A) Run from CLI
-
-Run one user once:
+**命令行模式**
 
 ```bash
+# 单次执行
 uv run python scripts/main.py run-once --user-id quant
-```
 
-Start scheduler loop:
-
-```bash
+# 定时循环
 uv run python scripts/main.py schedule --interval-seconds 300
 ```
 
-Run diagnostics:
+**Web 界面**
 
 ```bash
-uv run python scripts/main.py doctor
+uv run uvicorn web.app:app --reload --host 0.0.0.0 --port 8000
 ```
 
-### B) Run Web UI
+访问 http://127.0.0.1:8000
 
-Start server:
+---
 
-```bash
-uv run uvicorn web.app:app --reload
+## 工作流程
+
+```
+Discovery (多源检索) → Ranking (相关性排序) → Download (PDF下载)
+                                                        ↓
+Archive (归档存储) ← Summary (AI摘要) ← Parse (文本解析)
 ```
 
-Open:
+---
 
-- http://127.0.0.1:8000
+## 配置详解
 
-Main pages:
+### 推荐配置：量化金融追踪
 
-- Config: run workflow, update source/user/global settings.
-- Results: grouped papers, tags, and structured summary fields.
-- Logs: recent run history.
+```yaml
+global:
+  recency_window_days: 60           # 近2个月文献
+  discovery_limit_per_source: 20    # 每源检索20篇
+  use_llm_summary: true             # 启用AI摘要
+  summary_language: zh              # 中文输出
 
-Operational endpoints:
+  # PDF解析器选择
+  parser_backend: pypdf             # CPU友好
 
-- `GET /healthz`
-- `GET /api/diagnostics`
+  # 扩展兴趣控制
+  auto_query_from_interests: true
+  auto_query_mode: interests
+  keyword_kb_enabled: true
+  keyword_whitelist:
+    - quantitative trading
+    - market microstructure
+    - high frequency trading
 
-## Recommended Configuration Patterns
+users:
+  - user_id: quant
+    interests:
+      - quantitative trading
+      - market microstructure
+      - high frequency trading
+    enabled_sources:
+      - arxiv
+      - semantic_scholar
+    update_frequency: daily
+```
 
-For quantitative finance tracking:
+### PDF 解析器对比
 
-- Keep `recency_window_days: 60`.
-- Keep `auto_query_mode: interests`.
-- Tune `keyword_whitelist` with domain phrases.
-- Increase `discovery_limit_per_source` if recall is low.
-- Enable `use_llm_summary: true` when you need stable bilingual output quality.
+| 后端 | 硬件要求 | 速度 | 质量 | 推荐场景 |
+|------|----------|------|------|----------|
+| **pypdf** | CPU 即可 | ⚡ 快 | ⭐⭐⭐ | 无GPU、快速处理 |
+| **docling** | CUDA GPU | 🚀 中等 | ⭐⭐⭐⭐⭐ | 有GPU、高质量需求 |
 
-For stricter relevance:
+💡 **选择建议**
+- 无独立显卡 → 使用 `pypdf`
+- 有 NVIDIA GPU 且显存 ≥ 8GB → 使用 `docling`
 
-- Increase `min_relevance_ratio`.
-- Increase `ranking_threshold`.
+---
 
-For broader recall:
+## 界面预览
 
-- Lower `ranking_threshold` moderately.
-- Increase `discovery_limit_per_source` and `summary_limit`.
+### 配置页面
+- 一键运行工作流
+- 定时调度器控制
+- 数据源启停管理
+- 扩展兴趣实时编辑
 
-## Data Outputs
+### 结果页面
+- 按兴趣分组展示
+- 可折叠详情面板
+- 数学公式渲染支持
 
-- Downloaded PDFs: `data/storage/<user_id>/`
-- Parsed markdown: `data/markdown/<user_id>/`
-- Keyword KB: `data/keyword_kb.json`
-- SQLite history: `data/app.db`
-- Optional vector DB: `data/vector_db/`
+### 历史页面
+- 全文检索
+- 多用户筛选
+- 永久归档
 
-## Troubleshooting
+---
 
-1. `No candidates passed threshold`
+## 常见问题
 
-- Lower `ranking_threshold` or `min_relevance_ratio`.
-- Increase `discovery_limit_per_source`.
-- Verify query mode and interests.
+<details>
+<summary><b>❌ 无候选论文通过阈值</b></summary>
 
-2. Summary quality is noisy
+- 降低 `ranking_threshold`（如 4.0）
+- 降低 `min_relevance_ratio`（如 0.05）
+- 增加 `discovery_limit_per_source`（如 50）
+</details>
 
-- Set `use_llm_summary: true`.
-- Adjust `summary_max_chars`.
-- Switch parser backend if PDF extraction quality is poor.
+<details>
+<summary><b>📝 摘要质量不佳</b></summary>
 
-3. Source has no results
+- 确认 `use_llm_summary: true`
+- 调整 `summary_max_chars`（默认 1000）
+- 切换解析器后端（GPU用docling，CPU用pypdf）
+- 检查 LLM 服务是否正常响应
+</details>
 
-- Check source `enabled` and user `enabled_sources`.
-- Run `doctor` and inspect endpoint diagnostics.
+<details>
+<summary><b>🔌 某数据源无结果</b></summary>
 
-4. Language does not change as expected
+- 检查 `enabled: true`
+- 确认用户 `enabled_sources` 包含该源
+- 运行 `uv run python scripts/main.py doctor` 诊断
+- 检查网络连接与API限制
+</details>
 
-- Confirm `summary_language` in config and UI.
-- For strongest effect, enable `use_llm_summary: true`.
+---
 
-## Development Notes
-
-- Lint/test:
+## 开发
 
 ```bash
+# 运行测试
 uv run pytest -q
+
+# 代码检查
+uv run ruff check .
 ```
 
-- This repository focuses on configurable workflow correctness first; advanced citation-level summarization and richer document understanding can be added incrementally.
+---
+
+<p align="center">
+  Made with ❤️ for researchers
+</p>

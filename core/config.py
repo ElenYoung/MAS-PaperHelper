@@ -49,8 +49,9 @@ class GlobalConfig(BaseModel):
     use_llm_summary: bool = False
     llm_api_base: str | None = None
     llm_api_key_env: str = "OPENAI_API_KEY"
-    parser_backend: str = "pypdf"
+    parser_backend: str = "marker"
     parser_max_pages: int = 8
+    parser_device: str = "cuda"
     use_cross_encoder: bool = False
     cross_encoder_model: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
     auto_query_from_interests: bool = True

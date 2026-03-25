@@ -1,17 +1,176 @@
 from __future__ import annotations
 
-from fastapi import FastAPI, Form, Request
+import asyncio
+import dataclasses
+import json
+from datetime import UTC, datetime, timedelta
+from typing import Any
+
+from fastapi import FastAPI, Form, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 
 from core.config import get_user_config, load_config, save_config
-from core.diagnostics import run_diagnostics
 from core.database.factory import create_repository
+from core.diagnostics import run_diagnostics
+from core.keyword_kb import KeywordKnowledgeBase
 from core.tools.sources.registry import SourceRegistry
 from core.workflow import run_workflow_for_user
 
 app = FastAPI(title="MAS-PaperHelper Skeleton")
 templates = Jinja2Templates(directory="web/templates")
+
+# Global scheduler state
+_scheduler_task: asyncio.Task | None = None
+_scheduler_last_run: dict[str, datetime] = {}
+_scheduler_enabled: bool = False
+_scheduler_interval: int = 300  # 5 minutes check interval
+
+
+def _serialize_datetime(obj):
+    """Convert datetime objects to ISO format strings for JSON serialization."""
+    if isinstance(obj, datetime):
+        return obj.isoformat()
+    raise TypeError(f"Object of type {obj.__class__.__name__} is not JSON serializable")
+
+
+async def _scheduler_loop():
+    """Background scheduler that runs workflow for users based on their frequency setting."""
+    global _scheduler_last_run, _scheduler_enabled
+
+    source_registry = SourceRegistry()
+
+    while _scheduler_enabled:
+        app_config = load_config()
+        repository = create_repository(app_config)
+
+        for user in app_config.users:
+            if not _should_run_user(user.user_id, user.update_frequency):
+                continue
+
+            try:
+                result = run_workflow_for_user(
+                    app_config=app_config,
+                    user=user,
+                    source_registry=source_registry,
+                )
+                repository.save_workflow_run(result)
+                _scheduler_last_run[user.user_id] = datetime.now(UTC)
+                print(
+                    f"[scheduler] user={result.user_id} total={result.total_candidates} "
+                    f"kept={result.kept_candidates} summaries={len(result.summaries)}"
+                )
+            except Exception as e:
+                print(f"[scheduler] Error running workflow for {user.user_id}: {e}")
+
+        # Wait for next check interval
+        for _ in range(_scheduler_interval):
+            if not _scheduler_enabled:
+                break
+            await asyncio.sleep(1)
+
+
+def _should_run_user(user_id: str, frequency: str) -> bool:
+    """Check if a user should run based on their frequency setting."""
+    last = _scheduler_last_run.get(user_id)
+    if last is None:
+        return True
+
+    now = datetime.now(UTC)
+    normalized = frequency.strip().lower()
+    windows = {
+        "hourly": timedelta(hours=1),
+        "daily": timedelta(days=1),
+        "weekly": timedelta(days=7),
+    }
+    window = windows.get(normalized, timedelta(days=1))
+    return (now - last) >= window
+
+
+@app.on_event("startup")
+async def startup_event():
+    """Auto-start scheduler on startup if configured."""
+    global _scheduler_enabled, _scheduler_task
+    # Check if auto-start is enabled via env var or config
+    import os
+    if os.getenv("MAS_SCHEDULER_AUTO_START", "false").lower() == "true":
+        _scheduler_enabled = True
+        _scheduler_task = asyncio.create_task(_scheduler_loop())
+        print("[startup] Scheduler auto-started")
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Stop scheduler on shutdown."""
+    global _scheduler_enabled, _scheduler_task
+    _scheduler_enabled = False
+    if _scheduler_task:
+        _scheduler_task.cancel()
+        try:
+            await _scheduler_task
+        except asyncio.CancelledError:
+            pass
+        print("[shutdown] Scheduler stopped")
+
+
+@app.get("/api/scheduler/status", response_class=JSONResponse)
+def scheduler_status() -> JSONResponse:
+    """Get scheduler status."""
+    return JSONResponse(
+        content={
+            "enabled": _scheduler_enabled,
+            "check_interval_seconds": _scheduler_interval,
+            "last_runs": {
+                user_id: dt.isoformat() for user_id, dt in _scheduler_last_run.items()
+            },
+        }
+    )
+
+
+@app.post("/api/scheduler/start", response_class=JSONResponse)
+def scheduler_start() -> JSONResponse:
+    """Start the background scheduler."""
+    global _scheduler_enabled, _scheduler_task
+
+    if _scheduler_enabled and _scheduler_task and not _scheduler_task.done():
+        return JSONResponse(content={"status": "already_running"})
+
+    _scheduler_enabled = True
+    _scheduler_task = asyncio.create_task(_scheduler_loop())
+    return JSONResponse(content={"status": "started"})
+
+
+@app.post("/api/scheduler/stop", response_class=JSONResponse)
+def scheduler_stop() -> JSONResponse:
+    """Stop the background scheduler."""
+    global _scheduler_enabled, _scheduler_task
+
+    _scheduler_enabled = False
+    if _scheduler_task and not _scheduler_task.done():
+        _scheduler_task.cancel()
+    return JSONResponse(content={"status": "stopped"})
+
+
+@app.post("/api/scheduler/run-now", response_class=JSONResponse)
+def scheduler_run_now(user_id: str = Form(...)) -> JSONResponse:
+    """Manually trigger a run for a specific user via scheduler."""
+    app_config = load_config()
+    repository = create_repository(app_config)
+    user = get_user_config(app_config, user_id)
+
+    result = run_workflow_for_user(
+        app_config=app_config,
+        user=user,
+        source_registry=SourceRegistry(),
+    )
+    repository.save_workflow_run(result)
+    _scheduler_last_run[user_id] = datetime.now(UTC)
+
+    return JSONResponse(
+        content=json.loads(
+            json.dumps(dataclasses.asdict(result), default=_serialize_datetime)
+        )
+    )
 
 
 def _render_index(
@@ -74,6 +233,20 @@ def run_user(request: Request, user_id: str = Form(...)) -> HTMLResponse:
         repository=repository,
         result=result,
     )
+
+
+@app.post("/api/run", response_class=JSONResponse)
+def api_run_user(request: Request, user_id: str = Form(...)) -> JSONResponse:
+    app_config = load_config()
+    repository = create_repository(app_config)
+    user = get_user_config(app_config, user_id)
+    result = run_workflow_for_user(
+        app_config=app_config,
+        user=user,
+        source_registry=SourceRegistry(),
+    )
+    repository.save_workflow_run(result)
+    return JSONResponse(content=json.loads(json.dumps(dataclasses.asdict(result), default=_serialize_datetime)))
 
 
 @app.post("/sources/toggle", response_class=HTMLResponse)
@@ -178,3 +351,187 @@ def update_keyword_settings(
     save_config(app_config)
 
     return _render_index(request=request, app_config=app_config, repository=repository)
+
+
+@app.get("/api/history", response_class=JSONResponse)
+def api_history(
+    q: str = Query(""),
+    user_id: str = Query(""),
+    limit: int = Query(50),
+) -> JSONResponse:
+    app_config = load_config()
+    repository = create_repository(app_config)
+    results = repository.search_paper_history(
+        user_id=user_id or None, query=q, limit=min(limit, 200)
+    )
+    return JSONResponse(content=results)
+
+
+@app.get("/api/expanded-interests", response_class=JSONResponse)
+def api_get_expanded_interests(user_id: str = Query(...)) -> JSONResponse:
+    """Get expanded interests for a user from keyword knowledge base."""
+    app_config = load_config()
+    kb_path = app_config.global_config.keyword_kb_path
+    kb = KeywordKnowledgeBase(path=kb_path)
+    data = kb._load()
+    user_data = data.get("users", {}).get(user_id, {})
+    terms = user_data.get("terms", {})
+    domains = user_data.get("related_domains", {})
+    return JSONResponse(content={
+        "user_id": user_id,
+        "terms": [{"term": k, "score": v} for k, v in sorted(terms.items(), key=lambda x: x[1], reverse=True)],
+        "domains": [{"domain": k, "score": v} for k, v in sorted(domains.items(), key=lambda x: x[1], reverse=True)],
+        "updated_at": user_data.get("updated_at", ""),
+    })
+
+
+@app.post("/api/expanded-interests/add", response_class=JSONResponse)
+def api_add_expanded_interest(user_id: str = Form(...), term: str = Form(...), score: float = Form(1.0)) -> JSONResponse:
+    """Add or update a term in expanded interests."""
+    app_config = load_config()
+    kb_path = app_config.global_config.keyword_kb_path
+    kb = KeywordKnowledgeBase(path=kb_path)
+    data = kb._load()
+    users = data.setdefault("users", {})
+    bucket = users.setdefault(user_id, {"terms": {}, "related_domains": {}, "updated_at": ""})
+    terms = bucket.setdefault("terms", {})
+    terms[term.strip()] = round(float(score), 4)
+    bucket["updated_at"] = datetime.now(UTC).isoformat()
+    kb._save(data)
+    return JSONResponse(content={"status": "ok", "term": term.strip(), "score": score})
+
+
+@app.post("/api/expanded-interests/remove", response_class=JSONResponse)
+def api_remove_expanded_interest(user_id: str = Form(...), term: str = Form(...)) -> JSONResponse:
+    """Remove a term from expanded interests."""
+    app_config = load_config()
+    kb_path = app_config.global_config.keyword_kb_path
+    kb = KeywordKnowledgeBase(path=kb_path)
+    data = kb._load()
+    user_data = data.get("users", {}).get(user_id, {})
+    terms = user_data.get("terms", {})
+    if term in terms:
+        del terms[term]
+        user_data["updated_at"] = datetime.now(UTC).isoformat()
+        kb._save(data)
+        return JSONResponse(content={"status": "ok", "removed": term})
+    return JSONResponse(content={"status": "not_found", "term": term}, status_code=404)
+
+
+@app.post("/settings/global/update", response_class=JSONResponse)
+def update_global_settings(
+    max_concurrent_tasks: str = Form("5"),
+    ranking_threshold: str = Form("5.0"),
+    min_relevance_ratio: str = Form("0.05"),
+    summary_limit: str = Form("50"),
+    discovery_limit_per_source: str = Form("8"),
+    use_llm_summary: str = Form("true"),
+    parser_backend: str = Form("pypdf"),
+    parser_max_pages: str = Form("15"),
+    parser_device: str = Form("cpu"),
+    use_cross_encoder: str = Form("false"),
+    cross_encoder_model: str = Form("cross-encoder/ms-marco-MiniLM-L-6-v2"),
+) -> JSONResponse:
+    """Update global runtime settings."""
+    app_config = load_config()
+
+    try:
+        app_config.global_config.max_concurrent_tasks = max(1, int(max_concurrent_tasks))
+    except ValueError:
+        pass
+    try:
+        app_config.global_config.ranking_threshold = float(ranking_threshold)
+    except ValueError:
+        pass
+    try:
+        app_config.global_config.min_relevance_ratio = max(0.0, min(1.0, float(min_relevance_ratio)))
+    except ValueError:
+        pass
+    try:
+        app_config.global_config.summary_limit = max(0, int(summary_limit))
+    except ValueError:
+        pass
+    try:
+        app_config.global_config.discovery_limit_per_source = max(1, int(discovery_limit_per_source))
+    except ValueError:
+        pass
+
+    app_config.global_config.use_llm_summary = use_llm_summary == "true"
+
+    if parser_backend in {"pypdf", "docling"}:
+        app_config.global_config.parser_backend = parser_backend
+
+    try:
+        app_config.global_config.parser_max_pages = max(1, int(parser_max_pages))
+    except ValueError:
+        pass
+
+    if parser_device in {"cuda", "cpu"}:
+        app_config.global_config.parser_device = parser_device
+
+    app_config.global_config.use_cross_encoder = use_cross_encoder == "true"
+    app_config.global_config.cross_encoder_model = cross_encoder_model.strip()
+
+    save_config(app_config)
+    return JSONResponse(content={"status": "ok"})
+
+
+@app.post("/settings/source/update", response_class=JSONResponse)
+def update_source_settings(
+    source_name: str = Form(...),
+    priority: str = Form("1"),
+    rate_limit_per_min: str = Form("30"),
+    timeout_seconds: str = Form("20"),
+    retry: str = Form("2"),
+) -> JSONResponse:
+    """Update source-specific settings."""
+    app_config = load_config()
+
+    if source_name not in app_config.sources:
+        return JSONResponse(content={"status": "error", "message": "Source not found"}, status_code=404)
+
+    source = app_config.sources[source_name]
+    try:
+        source.priority = max(1, int(priority))
+    except ValueError:
+        pass
+    try:
+        source.rate_limit_per_min = max(1, int(rate_limit_per_min))
+    except ValueError:
+        pass
+    try:
+        source.timeout_seconds = max(1, int(timeout_seconds))
+    except ValueError:
+        pass
+    try:
+        source.retry = max(0, int(retry))
+    except ValueError:
+        pass
+
+    save_config(app_config)
+    return JSONResponse(content={"status": "ok"})
+
+
+@app.post("/settings/user/weights/update", response_class=JSONResponse)
+def update_user_weights(
+    user_id: str = Form(...),
+    recency_weight: str = Form("0.2"),
+    relevance_weight: str = Form("0.8"),
+) -> JSONResponse:
+    """Update user ranking weights."""
+    app_config = load_config()
+
+    for user in app_config.users:
+        if user.user_id == user_id:
+            try:
+                user.ranking_weights["recency"] = max(0.0, min(1.0, float(recency_weight)))
+            except ValueError:
+                pass
+            try:
+                user.ranking_weights["relevance"] = max(0.0, min(1.0, float(relevance_weight)))
+            except ValueError:
+                pass
+            break
+
+    save_config(app_config)
+    return JSONResponse(content={"status": "ok"})

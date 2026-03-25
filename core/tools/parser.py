@@ -22,13 +22,15 @@ class ParseTool:
     def __init__(
         self,
         markdown_dir: str = "data/markdown",
-        backend: str = "pypdf",
+        backend: str = "marker",
         max_pages: int = 8,
+        device: str = "cuda",
     ) -> None:
         self.markdown_dir = Path(markdown_dir)
         self.markdown_dir.mkdir(parents=True, exist_ok=True)
         self.backend = backend.strip().lower()
         self.max_pages = max(1, max_pages)
+        self.device = device.strip().lower()
 
     def parse_to_markdown(self, user_id: str, paper: PaperCandidate) -> PaperCandidate:
         user_dir = self.markdown_dir / user_id
@@ -47,6 +49,8 @@ class ParseTool:
             f"## Abstract\n\n{paper.abstract}\n"
             f"\n## Parsed Content\n\n{extracted_body}\n"
         )
+        # Clean surrogate characters that cannot be encoded to UTF-8
+        body = body.encode("utf-8", errors="ignore").decode("utf-8")
         target.write_text(body, encoding="utf-8")
         paper.markdown_path = str(target)
         return paper
@@ -107,49 +111,49 @@ class ParseTool:
             return "PDF parsing failed unexpectedly; using abstract-only fallback."
 
     def _extract_with_marker(self, path: Path) -> str | None:
-        marker_cmd = shutil.which("marker_single")
-        if not marker_cmd:
-            return None
-
-        output_dir = path.parent
         try:
-            subprocess.run(
-                [marker_cmd, str(path), "--output_dir", str(output_dir)],
-                check=True,
-                capture_output=True,
-                text=True,
-            )
-        except Exception:
-            return None
+            from marker.converters.pdf import PdfConverter
+            from marker.models import create_model_dict
 
-        markdown_path = output_dir / f"{path.stem}.md"
-        if not markdown_path.exists():
-            return None
-        try:
-            return markdown_path.read_text(encoding="utf-8")[:12000]
+            device = self.device if self.device == "cuda" else None
+            artifact_dict = create_model_dict(device=device)
+            config = {"output_format": "markdown"}
+            converter = PdfConverter(artifact_dict=artifact_dict, config=config)
+            rendered = converter(str(path))
+            text = rendered.markdown if hasattr(rendered, "markdown") else str(rendered)
+            return text[:12000] if text and text.strip() else None
         except Exception:
             return None
 
     def _extract_with_docling(self, path: Path) -> str | None:
-        docling_cmd = shutil.which("docling")
-        if not docling_cmd:
-            return None
-
-        output_dir = path.parent
         try:
-            subprocess.run(
-                [docling_cmd, "convert", str(path), "--to", "markdown", "--output", str(output_dir)],
-                check=True,
-                capture_output=True,
-                text=True,
+            from docling.datamodel.base_models import InputFormat
+            from docling.datamodel.document import ConversionResult
+            from docling_core.types.doc import DoclingDocument
+            from docling.document_converter import DocumentConverter, PdfFormatOption
+            from docling.datamodel.base_models import ConversionStatus
+
+            # Create converter with default settings
+            converter = DocumentConverter(
+                format_options={
+                    InputFormat.PDF: PdfFormatOption()
+                }
             )
-        except Exception:
+
+            # Convert the PDF
+            result = converter.convert(str(path))
+
+            # Check conversion status
+            if result.status != ConversionStatus.SUCCESS:
+                return None
+
+            # Export to markdown
+            markdown_text = result.document.export_to_markdown()
+
+            # Limit output size
+            if markdown_text and markdown_text.strip():
+                return markdown_text[:12000]
             return None
 
-        markdown_path = output_dir / f"{path.stem}.md"
-        if not markdown_path.exists():
-            return None
-        try:
-            return markdown_path.read_text(encoding="utf-8")[:12000]
         except Exception:
             return None

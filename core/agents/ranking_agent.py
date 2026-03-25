@@ -13,9 +13,9 @@ class RankingAgent(AgentBase):
 
     def __init__(
         self,
-        threshold: float = 6.0,
-        min_relevance_ratio: float = 0.2,
-        recency_window_days: int = 60,
+        threshold: float = 4.0,
+        min_relevance_ratio: float = 0.05,
+        recency_window_days: int = 90,
     ) -> None:
         self.threshold = threshold
         self.min_relevance_ratio = min_relevance_ratio
@@ -30,19 +30,53 @@ class RankingAgent(AgentBase):
         return ranked
 
     def keep(self, ranked: list[PaperCandidate]) -> list[PaperCandidate]:
+        if not ranked:
+            return []
+
+        # Calculate relative statistics for adaptive thresholding
+        scores = [item.score for item in ranked]
+        max_score = max(scores)
+        avg_score = sum(scores) / len(scores)
+
+        # Adaptive thresholds: use relative thresholds when overall scores are low
+        adaptive_threshold = min(self.threshold, max(3.0, avg_score * 0.8))
+        adaptive_min_relevance = min(self.min_relevance_ratio, max(0.03, self.min_relevance_ratio * 0.5))
+
         kept: list[PaperCandidate] = []
         for item in ranked:
-            if item.score < self.threshold:
+            # Skip extremely low scores (hard floor)
+            if item.score < 2.0:
                 continue
-            if item.relevance_score < self.min_relevance_ratio:
-                continue
+
+            # Primary filter: must meet score threshold OR be top-tier relative to peers
+            passes_score = item.score >= adaptive_threshold or item.score >= max_score * 0.7
+
+            # Secondary filter: relevance check with lenient fallback
+            passes_relevance = (
+                item.relevance_score >= adaptive_min_relevance
+                or item.score >= max_score * 0.85  # High scorers bypass strict relevance check
+            )
+
+            # Recency check: older papers allowed if highly relevant
             published_at = item.published_at
             if published_at.tzinfo is None:
                 published_at = published_at.replace(tzinfo=timezone.utc)
             age_days = max((datetime.now(timezone.utc) - published_at).days, 0)
-            if age_days > self.recency_window_days:
-                continue
-            kept.append(item)
+
+            # Allow older papers if they score well
+            effective_recency_window = self.recency_window_days * (1.5 if item.score >= max_score * 0.8 else 1.0)
+            passes_recency = age_days <= effective_recency_window
+
+            if passes_score and passes_relevance and passes_recency:
+                kept.append(item)
+
+        # Ensure at least some results by taking top candidates if filtering was too aggressive
+        min_results = min(3, len(ranked))
+        if len(kept) < min_results and len(ranked) >= min_results:
+            # Take best candidates even if they didn't pass all filters
+            fallback = [item for item in ranked if item not in kept][: min_results - len(kept)]
+            kept.extend(fallback)
+
         return kept
 
     def _score(self, user: UserConfig, candidate: PaperCandidate) -> float:

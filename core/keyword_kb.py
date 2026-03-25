@@ -42,17 +42,7 @@ class KeywordKnowledgeBase:
         merged: list[str] = []
         seen: set[str] = set()
 
-        for term in base_interests:
-            key = self._normalize_phrase(term)
-            if not key or key in seen:
-                continue
-            if key in deny:
-                continue
-            merged.append(term.strip())
-            seen.add(key)
-            if len(merged) >= limit:
-                return merged
-
+        # Priority 1: Whitelist terms (these are explicitly configured by user)
         for term in allow:
             key = self._normalize_phrase(term)
             if not key or key in seen:
@@ -64,6 +54,19 @@ class KeywordKnowledgeBase:
             if len(merged) >= limit:
                 return merged
 
+        # Priority 2: Base interests (user's explicit interests)
+        for term in base_interests:
+            key = self._normalize_phrase(term)
+            if not key or key in seen:
+                continue
+            if key in deny:
+                continue
+            merged.append(term.strip())
+            seen.add(key)
+            if len(merged) >= limit:
+                return merged
+
+        # Priority 3: Learned terms from knowledge base
         for term, _score in ordered:
             key = self._normalize_phrase(term)
             if not key or key in seen:

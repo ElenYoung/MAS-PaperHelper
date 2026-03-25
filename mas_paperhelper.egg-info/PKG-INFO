@@ -14,6 +14,11 @@ Requires-Dist: httpx>=0.27.0
 Requires-Dist: feedparser>=6.0.11
 Requires-Dist: langgraph>=0.2.52
 Requires-Dist: pypdf>=5.4.0
+Requires-Dist: docling>=2.0.0
+Requires-Dist: torch>=2.6.0
+Requires-Dist: transformers<4.50.0,>=4.48.0
+Requires-Dist: tokenizers<0.22,>=0.21
+Requires-Dist: opencv-python-headless>=4.10.0
 Provides-Extra: dev
 Requires-Dist: pytest>=8.3.0; extra == "dev"
 Requires-Dist: ruff>=0.6.0; extra == "dev"
@@ -28,64 +33,391 @@ Requires-Dist: sentence-transformers>=3.2.1; extra == "rerank"
 
 # MAS-PaperHelper
 
-Runnable project skeleton with configurable data sources.
+MAS-PaperHelper is a configurable multi-agent literature assistant for research workflows.
+It helps you:
 
-## Quick Start
+- Discover recent papers from multiple sources.
+- Rank papers by interest relevance and recency.
+- Download/parse PDFs into local markdown.
+- Generate structured fields like Research Problem and Innovation.
+- Persist workflow history and optionally vectorize summaries.
 
-1. Install base dependencies
+The project provides both CLI and Web UI usage, with most behavior controlled by `config/config.yaml`.
+
+## Architecture Overview
+
+Core workflow (LangGraph):
+
+1. Discovery: fetch candidates from enabled sources.
+2. Ranking: compute relevance + recency and filter by thresholds.
+3. Download & Parse: fetch PDF and convert into markdown.
+4. Summary: generate structured summary fields.
+5. KB Update: update keyword knowledge base and optional vector store.
+
+Default node chain:
+
+`Discovery -> Ranking -> Download&Parse -> Summary -> KB Update`
+
+## Features
+
+- Multi-user profile support in one config file.
+- Source-level controls (enable, priority, rate limit, timeout, retry).
+- Auto query generation from interests (`manual/interests/merge`).
+- Recency window filtering (for example, last 60 days).
+- Structured summary output with configurable language and max length.
+- Expanded interests / keyword learning with whitelist and blacklist.
+- Interest tags per paper + grouped display in UI.
+- Web controls for major settings and one-click run.
+- **PDF parsing with marker**: GPU-accelerated PDF parsing with formula/structure preservation.
+- **Deduplication**: prevents processing the same papers repeatedly across workflow runs.
+- **Paper history archive**: searchable archive of all processed papers in the web UI.
+- **Parallel processing**: concurrent PDF downloads and parsing for better performance.
+
+## Environment Setup
+
+### Prerequisites
+
+- Python `>=3.12`
+- CUDA `>=12.4` (for GPU-accelerated PDF parsing with marker)
+- [uv](https://docs.astral.sh/uv/) for dependency management
+
+### Step 1: Install uv
 
 ```bash
+# Windows (PowerShell)
+powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+
+# macOS/Linux
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+### Step 2: Clone and Setup Project
+
+```bash
+git clone <repository-url>
+cd MAS-PaperHelper
+
+# Create virtual environment and install dependencies
+uv venv --python 3.12
+
+# IMPORTANT: Install PyTorch with CUDA support BEFORE syncing other dependencies
+# For CUDA 12.4:
+uv pip install torch==2.6.0+cu124 --index-url https://download.pytorch.org/whl/cu124
+
+# Now sync remaining dependencies
 uv sync --extra dev
+
+# Optional extras (as needed):
+uv sync --extra google --extra vector --extra database --extra rerank
 ```
 
-Optional integrations:
+**Note**: The `marker-pdf` package is included in the base dependencies for PDF parsing.
+
+### Step 3: Download Marker Models
+
+The marker parser requires downloading AI models on first use. Run this command to pre-download:
 
 ```bash
-uv sync --extra google --extra vector --extra database
+uv run python -c "from marker.models import create_model_dict; create_model_dict(device='cuda')"
 ```
 
-2. Run one-shot workflow from CLI
+Models will be cached to `~/.cache/` and include:
+- Layout detection model
+- Text recognition model
+- Table recognition model
+- OCR error detection model
+
+This may take 5-10 minutes depending on your internet connection (~5GB download).
+
+### Step 4: Configure Environment
+
+Create or edit `config/config.yaml`:
 
 ```bash
-uv run python scripts/main.py run-once --user-id quant_researcher_01
+cp config/config.yaml.example config/config.yaml
 ```
 
-3. Start scheduler loop
+Key settings to configure:
+
+1. **LLM Provider** (choose one):
+   - Ollama (local): Set `llm_provider: ollama`, `base_model: qwen2.5:14b`
+   - OpenAI: Set `llm_provider: openai`, `base_model: gpt-4o-mini`, add your API key
+
+2. **Parser settings** (for marker with CUDA):
+   ```yaml
+   parser_backend: marker
+   parser_device: cuda
+   parser_max_pages: 8
+   ```
+
+3. **User profile**: Edit the default user or add new users with your research interests.
+
+## Project Structure
+
+```text
+.
+├── config/
+│   └── config.yaml              # Main configuration file
+├── core/
+│   ├── agents/                  # LangGraph workflow agents
+│   ├── tools/                   # PDF parsers, downloaders, etc.
+│   ├── database/                # SQLite/ClickHouse repositories
+│   ├── vector/                  # Vector store implementations
+│   └── ...
+├── scripts/
+│   └── main.py                  # CLI entry point
+├── web/
+│   ├── app.py                   # FastAPI web application
+│   └── templates/               # Jinja2 HTML templates
+├── data/
+│   ├── storage/                 # Downloaded PDFs
+│   ├── markdown/                # Parsed markdown files
+│   ├── keyword_kb.json          # Keyword knowledge base
+│   └── app.db                   # SQLite database (paper history, dedup)
+└── README.md
+```
+
+## Configuration Guide
+
+All runtime behavior is controlled by `config/config.yaml`.
+
+### 1) `global`
+
+Model and runtime controls:
+
+- `llm_provider`: `ollama` or `openai`
+- `base_model`, `embedding_model`
+- `base_model_api_base`, `embedding_api_base`
+- `llm_api_key_env`: Environment variable name for API key
+- `max_concurrent_tasks`: Number of parallel PDF downloads/parsing tasks
+
+Ranking/retrieval controls:
+
+- `ranking_threshold`: total score threshold (papers below this are filtered)
+- `min_relevance_ratio`: relevance floor (0.0-1.0)
+- `recency_window_days`: only keep papers in this age window (e.g., 60 for last 2 months)
+- `discovery_limit_per_source`: fetch count per source per run
+
+Summary controls:
+
+- `use_llm_summary`: whether LLM summarization is enabled
+- `summary_language`: `zh` or `en`
+- `summary_max_chars`: max chars for each summary field
+- `summary_limit`: number of summaries per run (set to 0 for unlimited)
+
+Parsing controls:
+
+- `parser_backend`: `pypdf` / `marker` / `docling`
+- `parser_device`: `cuda` or `cpu` (for marker backend)
+- `parser_max_pages`: max pages to parse per PDF
+
+Query controls:
+
+- `auto_query_from_interests`: whether to auto-generate search queries
+- `auto_query_mode`: `manual` / `interests` / `merge`
+- `source_query_templates`: per-source query templates
+
+Keyword KB controls:
+
+- `keyword_kb_enabled`: enable keyword learning
+- `keyword_kb_path`: path to keyword knowledge base file
+- `keyword_expand_limit`: max expanded keywords per run
+- `keyword_max_new_terms_per_run`: limit new terms added
+- `keyword_whitelist`: always-include keywords
+- `keyword_blacklist`: always-exclude keywords
+
+### 2) `database`
+
+- `backend`: `sqlite` or `clickhouse`
+- `sqlite_path`: path to SQLite database
+- `clickhouse_dsn`: ClickHouse connection string
+
+### 3) `vector_store`
+
+- `backend`: `none` or `chroma`
+- `chroma_path`: path to Chroma database
+
+### 4) `sources`
+
+Each source has:
+
+- `enabled`: whether to use this source
+- `priority`: source priority (higher = preferred)
+- `rate_limit_per_min`: API rate limit
+- `timeout_seconds`: request timeout
+- `retry`: number of retries on failure
+
+Supported source keys:
+
+- `arxiv`
+- `semantic_scholar`
+- `biorxiv_medrxiv_rss`
+- `google_scholar` (requires `--extra google`)
+
+### 5) `users`
+
+Each user profile supports:
+
+- `user_id`: unique identifier
+- `interests`: list of research interests (used for ranking)
+- `search_query`: manual query (if not using auto-generation)
+- `update_frequency`: `hourly` / `daily` / `weekly`
+- `enabled_sources`: which sources to use for this user
+- `ranking_weights.recency`: weight for recency score (0.0-1.0)
+- `ranking_weights.relevance`: weight for relevance score (0.0-1.0)
+- `llm_api_key`: optional per-user API key
+
+## Usage Guide
+
+### A) Run from CLI
+
+Run one user once:
+
+```bash
+uv run python scripts/main.py run-once --user-id quant
+```
+
+Start scheduler loop:
 
 ```bash
 uv run python scripts/main.py schedule --interval-seconds 300
 ```
 
-4. Start web app
+Run diagnostics:
 
 ```bash
-uv run uvicorn web.app:app --reload
+uv run python scripts/main.py doctor
 ```
 
-Open http://127.0.0.1:8000
+### B) Run Web UI
 
-## What is included
+Start server:
 
-- Multi-user configuration loading from config/config.yaml
-- Configurable source toggles and per-user source selection
-- Source registry with pluggable connectors
-- Real fetchers for arXiv, Semantic Scholar, and BioRxiv/MedRxiv RSS with fallback behavior
-- Optional Google Scholar connector (enabled by config + google extra)
-- Agent-based orchestration pipeline: Discovery Agent, Ranking Agent, Summary Agent
-- LangGraph state-machine execution for the agent pipeline
-- Node chain: Discovery -> Ranking -> Download&Parse -> Summary -> KB Update
-- Optional LLM-powered summary (Ollama/OpenAI-compatible) with safe fallback
-- Optional Cross-Encoder reranking with graceful fallback when dependency is unavailable
-- Configurable persistence backend (SQLite by default, optional ClickHouse)
-- Optional Chroma vector upsert for generated summaries
-- Parser backend switch (pypdf/marker/docling) with automatic fallback
-- Section-aware fallback summarization from parsed markdown headings
-- FastAPI dashboard with manual trigger endpoint
-- Web source toggles and run history panel
-- Scheduler respects per-user frequency (hourly/daily/weekly)
-- In-memory circuit breaker for per-source fault isolation and automatic cooldown
+```bash
+uv run uvicorn web.app:app --reload --host 0.0.0.0 --port 8000
+```
 
-## What is intentionally deferred
+Open in browser:
 
-- Marker/Docling environment bootstrapping scripts and GPU acceleration tuning
-- Deep section-level citation grounding and table/figure extraction in summaries
+- http://127.0.0.1:8000
+
+Main pages:
+
+- **Config**: Run workflow, update source/user/global settings.
+- **Results**: View grouped papers, interest tags, and structured summaries.
+- **Logs**: Recent run history.
+- **History**: Search and browse all previously processed papers.
+
+Operational endpoints:
+
+- `GET /healthz` - Health check
+- `GET /api/diagnostics` - System diagnostics
+- `POST /api/run` - Trigger workflow run (AJAX)
+- `GET /api/history` - Search paper history
+
+## Recommended Configuration Patterns
+
+### For quantitative finance tracking:
+
+```yaml
+global:
+  recency_window_days: 60
+  auto_query_mode: interests
+  keyword_whitelist: ["quantitative trading", "market microstructure", "algorithmic trading"]
+  discovery_limit_per_source: 20
+  use_llm_summary: true
+  summary_language: zh
+```
+
+### For stricter relevance:
+
+- Increase `min_relevance_ratio` to 0.6 or higher
+- Increase `ranking_threshold` to 0.7 or higher
+- Enable keyword whitelist with specific terms
+
+### For broader recall:
+
+- Lower `ranking_threshold` to 0.4
+- Increase `discovery_limit_per_source` to 50
+- Increase `summary_limit` to process more papers
+
+## Data Outputs
+
+- **Downloaded PDFs**: `data/storage/<user_id>/`
+- **Parsed markdown**: `data/markdown/<user_id>/`
+- **Keyword KB**: `data/keyword_kb.json`
+- **SQLite history**: `data/app.db` (contains seen_papers, paper_history tables)
+- **Optional vector DB**: `data/vector_db/`
+
+## Troubleshooting
+
+### 1. `No candidates passed threshold`
+
+- Lower `ranking_threshold` or `min_relevance_ratio`.
+- Increase `discovery_limit_per_source`.
+- Verify query mode and interests are properly set.
+
+### 2. Summary quality is noisy
+
+- Set `use_llm_summary: true`.
+- Adjust `summary_max_chars` (default 500).
+- Switch parser backend if PDF extraction quality is poor.
+- Verify LLM is responding correctly: `curl http://localhost:11434/api/generate -d '{"model":"qwen2.5:14b","prompt":"test"}'`
+
+### 3. Marker parser fails or uses CPU instead of CUDA
+
+**Symptoms**: Slow PDF parsing, "CUDA not available" warnings
+
+**Solutions**:
+
+1. Verify CUDA is available in Python:
+   ```bash
+   uv run python -c "import torch; print(f'CUDA available: {torch.cuda.is_available()}')"
+   ```
+
+2. If CUDA is not available, reinstall PyTorch:
+   ```bash
+   uv pip uninstall torch torchvision torchaudio
+   uv pip install torch==2.6.0+cu124 --index-url https://download.pytorch.org/whl/cu124
+   ```
+
+3. Verify marker can load models:
+   ```bash
+   uv run python -c "from marker.models import create_model_dict; d = create_model_dict(device='cuda'); print('Models loaded successfully')"
+   ```
+
+### 4. Source has no results
+
+- Check source `enabled: true` in config.
+- Verify user has source in `enabled_sources` list.
+- Run `doctor` and inspect endpoint diagnostics.
+- Check rate limits and API keys if required.
+
+### 5. Language does not change as expected
+
+- Confirm `summary_language` in config (values: `zh` or `en`).
+- For strongest effect, enable `use_llm_summary: true`.
+- Without LLM, only template-based language switching is available.
+
+### 6. Windows console Unicode errors
+
+If you see `UnicodeEncodeError: 'gbk' codec can't encode character`:
+
+```powershell
+# Set UTF-8 encoding in PowerShell
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+$env:PYTHONIOENCODING = "utf-8"
+```
+
+## Development Notes
+
+- Lint and test:
+
+```bash
+uv run pytest -q
+uv run ruff check .
+```
+
+- The marker parser extracts up to 12,000 characters from the first 8 pages (configurable) of each PDF for optimal LLM context usage.
+
+- This repository focuses on configurable workflow correctness first; advanced citation-level summarization and richer document understanding can be added incrementally.

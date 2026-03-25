@@ -2,8 +2,11 @@ README.md
 pyproject.toml
 core/__init__.py
 core/config.py
+core/diagnostics.py
+core/keyword_kb.py
 core/langgraph_workflow.py
 core/models.py
+core/query_builder.py
 core/workflow.py
 core/agents/__init__.py
 core/agents/base.py
@@ -42,8 +45,13 @@ mas_paperhelper.egg-info/top_level.txt
 tests/test_agents_and_workflow.py
 tests/test_circuit_and_rerank.py
 tests/test_config_and_registry.py
+tests/test_diagnostics.py
+tests/test_keyword_kb.py
 tests/test_langgraph_and_repo.py
 tests/test_parse_tool.py
+tests/test_query_builder.py
+tests/test_ranking_relevance_guard.py
 tests/test_scheduler_frequency.py
+tests/test_split_endpoints.py
 tests/test_summary_agent.py
 web/app.py
