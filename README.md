@@ -768,8 +768,4 @@ llm_analysis_batch_size: 12
   Made with ❤️ for researchers
 </p>
 
----
 
-<p align="center">
-  Made with ❤️ for researchers
-</p>
