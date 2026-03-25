@@ -105,7 +105,69 @@ class SqliteRepository:
             )
         return items
 
-    def get_seen_paper_ids(self, user_id: str) -> set[str]:
+    def get_latest_run_result(self, user_id: str | None = None) -> dict | None:
+        """Get the latest workflow run result with summaries for a user (or any user if None)."""
+        # Get latest workflow run
+        sql = """
+            SELECT id, user_id, total_candidates, kept_candidates, threshold,
+                   sources_used, summary_count, created_at
+            FROM workflow_runs
+            WHERE 1=1
+        """
+        params: list = []
+        if user_id:
+            sql += " AND user_id = ?"
+            params.append(user_id)
+        sql += " ORDER BY id DESC LIMIT 1"
+
+        row = self._conn.execute(sql, params).fetchone()
+        if not row:
+            return None
+
+        run_id, run_user_id, total, kept, threshold, sources, summary_count, created_at = row
+
+        # Get summaries for this run from paper_history (by user and recent timestamp)
+        # We get papers saved around the same time as the run
+        summaries_sql = """
+            SELECT title, source, score, published_at, paper_url, abstract,
+                   research_problem, innovation_summary, matched_interests
+            FROM paper_history
+            WHERE user_id = ?
+            ORDER BY created_at DESC
+            LIMIT ?
+        """
+        summary_rows = self._conn.execute(summaries_sql, (run_user_id, summary_count)).fetchall()
+
+        summaries = []
+        for srow in summary_rows:
+            from datetime import datetime
+            pub_at = srow[3]
+            if pub_at and isinstance(pub_at, str):
+                try:
+                    pub_at = datetime.fromisoformat(pub_at)
+                except ValueError:
+                    pub_at = None
+            summaries.append({
+                "title": srow[0],
+                "source": srow[1],
+                "score": srow[2],
+                "published_at": pub_at,
+                "paper_url": srow[4],
+                "abstract": srow[5],
+                "research_problem": srow[6],
+                "innovation_summary": srow[7],
+                "matched_interests": srow[8].split(",") if srow[8] else [],
+            })
+
+        return {
+            "user_id": run_user_id,
+            "total_candidates": total,
+            "kept_candidates": kept,
+            "threshold": threshold,
+            "sources_used": sources.split(",") if sources else [],
+            "summaries": summaries,
+            "created_at": created_at,
+        }
         rows = self._conn.execute(
             "SELECT paper_id FROM seen_papers WHERE user_id = ?", (user_id,)
         ).fetchall()

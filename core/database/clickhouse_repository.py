@@ -84,3 +84,42 @@ class ClickHouseRepository:
                 }
             )
         return items
+
+    def get_latest_run_result(self, user_id: str | None = None) -> dict | None:
+        """Get the latest workflow run result for a user (ClickHouse implementation)."""
+        try:
+            import clickhouse_connect  # type: ignore
+        except Exception:  # pragma: no cover - optional dependency
+            return None
+
+        client = clickhouse_connect.get_client(dsn=self.dsn)
+
+        where_clause = "WHERE 1=1"
+        params: dict = {}
+        if user_id:
+            where_clause = "WHERE user_id = %(user_id)s"
+            params["user_id"] = user_id
+
+        row = client.query(
+            f"""
+            SELECT user_id, total_candidates, kept_candidates, threshold, sources_used, summary_count, created_at
+            FROM workflow_runs
+            {where_clause}
+            ORDER BY created_at DESC
+            LIMIT 1
+            """,
+            parameters=params,
+        ).result_rows
+
+        if not row:
+            return None
+
+        return {
+            "user_id": row[0][0],
+            "total_candidates": row[0][1],
+            "kept_candidates": row[0][2],
+            "threshold": row[0][3],
+            "sources_used": row[0][4].split(",") if row[0][4] else [],
+            "summaries": [],  # ClickHouse implementation doesn't store full summaries yet
+            "created_at": str(row[0][6]),
+        }

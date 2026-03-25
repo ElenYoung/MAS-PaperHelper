@@ -1459,10 +1459,10 @@
       });
 
       // ===========================
-      // 3. 智能路由：如果后端返回了结果，则直接跳到”结果页面”
+      // 3. 智能路由：如果后端返回了结果，则直接跳到"结果页面"
       // ===========================
       {% if result %}
-        switchTab(“page-results”);
+        switchTab('page-results');
       {% endif %}
 
       // ===========================
@@ -1477,7 +1477,7 @@
           .then(data => {
             const container = document.getElementById('history-results');
             if (!data.length) {
-              container.innerHTML = '<p class=”empty-state”>未找到匹配的历史论文。</p>';
+              container.innerHTML = '<p class="empty-state">未找到匹配的历史论文。</p>';
               return;
             }
             container.innerHTML = data.map(p => `

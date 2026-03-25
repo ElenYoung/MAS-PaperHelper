@@ -17,6 +17,11 @@ from core.keyword_kb import KeywordKnowledgeBase
 from core.tools.sources.registry import SourceRegistry
 from core.workflow import run_workflow_for_user
 
+# Suppress webdriver-manager logging noise
+import os
+os.environ["WDM_LOG"] = "0"
+os.environ["WDM_PRINT_FIRST_LINE"] = "False"
+
 app = FastAPI(title="MAS-PaperHelper Skeleton")
 templates = Jinja2Templates(directory="web/templates")
 
@@ -128,7 +133,7 @@ def scheduler_status() -> JSONResponse:
 
 
 @app.post("/api/scheduler/start", response_class=JSONResponse)
-def scheduler_start() -> JSONResponse:
+async def scheduler_start() -> JSONResponse:
     """Start the background scheduler."""
     global _scheduler_enabled, _scheduler_task
 
@@ -180,6 +185,40 @@ def _render_index(
     result=None,
 ) -> HTMLResponse:
     history = repository.list_recent_runs(limit=10)
+    # Auto-load latest result if none provided
+    latest_result = result
+    if latest_result is None:
+        raw_latest = repository.get_latest_run_result()
+        if raw_latest:
+            from core.models import PaperSummary, WorkflowResult
+            summaries = [
+                PaperSummary(
+                    title=s["title"],
+                    source=s["source"],
+                    score=s["score"],
+                    published_at=s["published_at"],
+                    paper_url=s["paper_url"],
+                    abstract=s["abstract"],
+                    research_problem=s["research_problem"],
+                    innovation_summary=s["innovation_summary"],
+                    matched_interests=s["matched_interests"],
+                )
+                for s in raw_latest["summaries"]
+            ]
+            # Build grouped_summaries by matched_interests
+            grouped: dict[str, list[PaperSummary]] = {}
+            for summary in summaries:
+                primary = summary.matched_interests[0] if summary.matched_interests else "综合"
+                grouped.setdefault(primary, []).append(summary)
+            latest_result = WorkflowResult(
+                user_id=raw_latest["user_id"],
+                total_candidates=raw_latest["total_candidates"],
+                kept_candidates=raw_latest["kept_candidates"],
+                sources_used=raw_latest["sources_used"],
+                threshold=raw_latest["threshold"],
+                summaries=summaries,
+                grouped_summaries=grouped,
+            )
     return templates.TemplateResponse(
         request,
         "index.html",
@@ -188,7 +227,7 @@ def _render_index(
             "users_data": app_config.users,
             "sources": app_config.sources,
             "global_config": app_config.global_config,
-            "result": result,
+            "result": latest_result,
             "history": history,
         },
     )
