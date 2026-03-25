@@ -162,7 +162,7 @@
         font-size: 2.8rem;
         font-weight: 700;
         margin: 0 0 10px 0;
-        background: linear-gradient(to right, var(--accent-primary), var(--accent-secondary));
+        background: linear-gradient(to right, #581c87, #7c3aed);
         background-clip: text;
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
@@ -614,7 +614,6 @@
         justify-content: space-between;
         align-items: center;
         padding: 16px 20px;
-        background: linear-gradient(135deg, var(--accent-primary) 0%, var(--accent-secondary) 100%);
         color: white;
         border: none;
         border-radius: 12px;
@@ -625,9 +624,23 @@
         box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
       }
 
+      /* 三色轮替配色方案 */
+      .collapsible-section:nth-child(3n+1) .section-toggle {
+        background: linear-gradient(135deg, #312e81 0%, #4338ca 100%);
+      }
+
+      .collapsible-section:nth-child(3n+2) .section-toggle {
+        background: linear-gradient(135deg, #0f766e 0%, #0d9488 100%);
+      }
+
+      .collapsible-section:nth-child(3n+3) .section-toggle {
+        background: linear-gradient(135deg, #7c2d12 0%, #c2410c 100%);
+      }
+
       .section-toggle:hover {
-        box-shadow: 0 4px 12px var(--btn-hover-shadow);
-        transform: translateY(-1px);
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+        transform: translateY(-2px);
+        filter: brightness(1.1);
       }
 
       .section-toggle:active {
@@ -1079,14 +1092,16 @@
                 <span>{{ name }} <span class="status-badge {{ 'status-active' if cfg.enabled else 'status-inactive' }}">{{ 'Active' if cfg.enabled else 'Inactive' }}</span></span>
               </button>
               <div class="sub-content collapsed">
+                <!-- Toggle Form - Separate from settings form -->
+                <div class="row" style="gap: 10px; margin-bottom: 12px;">
+                  <form method="post" action="/sources/toggle" style="margin: 0;">
+                    <input type="hidden" name="source_name" value="{{ name }}" />
+                    <input type="hidden" name="enabled" value="{{ 'false' if cfg.enabled else 'true' }}" />
+                    <button type="submit" class="small">{{ 'Disable' if cfg.enabled else 'Enable' }}</button>
+                  </form>
+                </div>
+                <!-- Settings Form -->
                 <form onsubmit="return saveSourceSettings(event, '{{ name }}')">
-                  <div class="row" style="gap: 10px; margin-bottom: 12px;">
-                    <form method="post" action="/sources/toggle" style="margin: 0;">
-                      <input type="hidden" name="source_name" value="{{ name }}" />
-                      <input type="hidden" name="enabled" value="{{ 'false' if cfg.enabled else 'true' }}" />
-                      <button type="submit" class="small">{{ 'Disable' if cfg.enabled else 'Enable' }}</button>
-                    </form>
-                  </div>
                   <div class="source-config-grid">
                     <div class="form-group">
                       <label>Priority</label>
@@ -1464,6 +1479,9 @@
                 </div>
               </details>
             `).join('');
+            if (window.MathJax) {
+              MathJax.typesetPromise([container]);
+            }
           });
       }
 
@@ -1532,6 +1550,9 @@
           html += '<p class="empty-state">No candidates passed the relevance threshold criteria for this cycle.</p>';
         }
         container.innerHTML = html;
+        if (window.MathJax) {
+          MathJax.typesetPromise([container]);
+        }
       }
 
       function summaryCard(s) {

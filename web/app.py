@@ -268,10 +268,10 @@ def toggle_source(
 def update_user(
     request: Request,
     user_id: str = Form(...),
-    search_query: str = Form(...),
-    interests_csv: str = Form(...),
-    update_frequency: str = Form(...),
-    enabled_sources_csv: str = Form(...),
+    search_query: str = Form(""),
+    interests_csv: str = Form(""),
+    update_frequency: str = Form("daily"),
+    enabled_sources_csv: str = Form(""),
 ) -> HTMLResponse:
     app_config = load_config()
     repository = create_repository(app_config)
