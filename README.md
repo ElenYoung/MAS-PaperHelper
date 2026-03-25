@@ -7,7 +7,7 @@
 </p>
 
 <p align="center">
-  <b>多源学术文献智能发现与摘要系统</b><br>
+  <b>多源学术文献智能推荐与前沿捕捉系统</b><br>
   <i>Multi-Agent System for Intelligent Paper Discovery & Summarization</i>
 </p>
 

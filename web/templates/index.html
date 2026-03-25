@@ -820,262 +820,358 @@
 
       <!-- 第一页：配置页面 -->
       <div id="page-config" class="page-tab active">
-        <div class="section">
-          <h2>Execution Engine</h2>
-          <form class="row" id="run-form" onsubmit="return runPipeline(event)">
-            <div style="flex-grow: 1;">
-              <select name="user_id" id="user_id">
+
+        <!-- Execution Engine -->
+        <div class="collapsible-section">
+          <button type="button" class="section-toggle" onclick="toggleSection(this)">
+            <span>Execution Engine</span>
+          </button>
+          <div class="section-content">
+            <form class="row" id="run-form" onsubmit="return runPipeline(event)">
+              <div style="flex-grow: 1;">
+                <select name="user_id" id="user_id">
+                  {% for user in users %}
+                    <option value="{{ user }}">{{ user }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+              <button type="submit" id="run-btn">Initialize Pipeline</button>
+            </form>
+          </div>
+        </div>
+
+        <!-- Auto Scheduler Control -->
+        <div class="collapsible-section">
+          <button type="button" class="section-toggle" onclick="toggleSection(this)">
+            <span>Auto Scheduler Control</span>
+          </button>
+          <div class="section-content collapsed">
+            <div class="form-group">
+              <div id="scheduler-status" style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;">
+                <span class="status-badge status-inactive" id="scheduler-status-badge">Stopped</span>
+                <span id="scheduler-last-run">Last run: never</span>
+              </div>
+              <div class="inline-note">
+                Scheduler automatically runs pipeline based on each user's "Synchronization Cycle" setting (hourly/daily/weekly).
+                Check interval: 5 minutes.
+              </div>
+            </div>
+            <div class="row" style="gap: 10px;">
+              <button type="button" id="scheduler-start-btn" onclick="toggleScheduler(true)" style="flex: 1;">Start Scheduler</button>
+              <button type="button" id="scheduler-stop-btn" onclick="toggleScheduler(false)" style="flex: 1;" disabled>Stop Scheduler</button>
+              <button type="button" id="scheduler-run-now-btn" onclick="schedulerRunNow()" style="flex: 1;">Run Now</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Global Runtime Settings -->
+        <div class="collapsible-section">
+          <button type="button" class="section-toggle" onclick="toggleSection(this)">
+            <span>Global Runtime Settings</span>
+          </button>
+          <div class="section-content collapsed">
+            <form onsubmit="return saveGlobalSettings(event)">
+              <div class="row" style="gap: 15px; flex-wrap: wrap;">
+                <div class="form-group" style="flex: 1; min-width: 200px;">
+                  <label for="gr_ranking_threshold">Ranking Threshold</label>
+                  <input type="number" id="gr_ranking_threshold" step="0.1" value="{{ global_config.ranking_threshold }}" />
+                  <div class="inline-note">Papers below this score are filtered (lower = more lenient)</div>
+                </div>
+                <div class="form-group" style="flex: 1; min-width: 200px;">
+                  <label for="gr_min_relevance_ratio">Min Relevance Ratio</label>
+                  <input type="number" id="gr_min_relevance_ratio" step="0.01" min="0" max="1" value="{{ global_config.min_relevance_ratio }}" />
+                  <div class="inline-note">0-1, lower = more lenient</div>
+                </div>
+              </div>
+
+              <div class="row" style="gap: 15px; flex-wrap: wrap; margin-top: 15px;">
+                <div class="form-group" style="flex: 1; min-width: 200px;">
+                  <label for="gr_discovery_limit_per_source">Discovery Limit Per Source</label>
+                  <input type="number" id="gr_discovery_limit_per_source" min="1" value="{{ global_config.discovery_limit_per_source }}" />
+                </div>
+                <div class="form-group" style="flex: 1; min-width: 200px;">
+                  <label for="gr_summary_limit">Summary Limit (0=unlimited)</label>
+                  <input type="number" id="gr_summary_limit" min="0" value="{{ global_config.summary_limit }}" />
+                </div>
+                <div class="form-group" style="flex: 1; min-width: 200px;">
+                  <label for="gr_max_concurrent_tasks">Max Concurrent Tasks</label>
+                  <input type="number" id="gr_max_concurrent_tasks" min="1" value="{{ global_config.max_concurrent_tasks }}" />
+                </div>
+              </div>
+
+              <div class="row" style="gap: 15px; flex-wrap: wrap; margin-top: 15px;">
+                <div class="form-group" style="flex: 1; min-width: 200px;">
+                  <label style="display:flex; align-items:center; gap:10px; cursor:pointer;">
+                    <input type="checkbox" id="gr_use_llm_summary" {% if global_config.use_llm_summary %}checked{% endif %} />
+                    Use LLM Summary
+                  </label>
+                </div>
+                <div class="form-group" style="flex: 1; min-width: 200px;">
+                  <label style="display:flex; align-items:center; gap:10px; cursor:pointer;">
+                    <input type="checkbox" id="gr_use_cross_encoder" {% if global_config.use_cross_encoder %}checked{% endif %} />
+                    Use Cross-Encoder Rerank
+                  </label>
+                </div>
+              </div>
+
+              <button type="submit" style="margin-top: 15px;">Save Global Settings</button>
+            </form>
+          </div>
+        </div>
+
+        <!-- PDF Parser Settings -->
+        <div class="collapsible-section">
+          <button type="button" class="section-toggle" onclick="toggleSection(this)">
+            <span>PDF Parser Settings</span>
+          </button>
+          <div class="section-content collapsed">
+            <form onsubmit="return saveParserSettings(event)">
+              <div class="row" style="gap: 15px; flex-wrap: wrap;">
+                <div class="form-group" style="flex: 1; min-width: 200px;">
+                  <label for="parser_backend">Parser Backend</label>
+                  <select id="parser_backend">
+                    <option value="pypdf" {% if global_config.parser_backend == "pypdf" %}selected{% endif %}>pypdf (CPU, Fast)</option>
+                    <option value="docling" {% if global_config.parser_backend == "docling" %}selected{% endif %}>docling (GPU, High Quality)</option>
+                  </select>
+                  <div class="inline-note">💡 Use pypdf without GPU, docling with CUDA</div>
+                </div>
+                <div class="form-group" style="flex: 1; min-width: 200px;">
+                  <label for="parser_device">Device</label>
+                  <select id="parser_device">
+                    <option value="cpu" {% if global_config.parser_device == "cpu" %}selected{% endif %}>CPU</option>
+                    <option value="cuda" {% if global_config.parser_device == "cuda" %}selected{% endif %}>CUDA</option>
+                  </select>
+                </div>
+                <div class="form-group" style="flex: 1; min-width: 200px;">
+                  <label for="parser_max_pages">Max Pages Per PDF</label>
+                  <input type="number" id="parser_max_pages" min="1" value="{{ global_config.parser_max_pages }}" />
+                </div>
+              </div>
+              <button type="submit" style="margin-top: 15px;">Save Parser Settings</button>
+            </form>
+          </div>
+        </div>
+
+        <!-- Auto Query Strategy -->
+        <div class="collapsible-section">
+          <button type="button" class="section-toggle" onclick="toggleSection(this)">
+            <span>Auto Query Strategy</span>
+          </button>
+          <div class="section-content collapsed">
+            <form method="post" action="/settings/query/update">
+              <input type="hidden" name="auto_query_from_interests" value="false" />
+              <div class="form-group">
+                <label style="display:flex; align-items:center; gap:10px; cursor:pointer;">
+                  <input type="checkbox" name="auto_query_from_interests" value="true" {% if global_config.auto_query_from_interests %}checked{% endif %} />
+                  Enable auto query from user interests
+                </label>
+              </div>
+              <div class="form-group">
+                <label for="auto_query_mode">Auto Query Mode</label>
+                <select id="auto_query_mode" name="auto_query_mode">
+                  <option value="merge" {% if global_config.auto_query_mode == "merge" %}selected{% endif %}>merge (手写 + 兴趣词合并)</option>
+                  <option value="interests" {% if global_config.auto_query_mode == "interests" %}selected{% endif %}>interests (仅兴趣词)</option>
+                  <option value="manual" {% if global_config.auto_query_mode == "manual" %}selected{% endif %}>manual (仅手写 search_query)</option>
+                </select>
+              </div>
+              <button type="submit">Save Query Strategy</button>
+            </form>
+          </div>
+        </div>
+
+        <!-- Expanded Interests Settings -->
+        <div class="collapsible-section">
+          <button type="button" class="section-toggle" onclick="toggleSection(this)">
+            <span>Expanded Interests Settings</span>
+          </button>
+          <div class="section-content collapsed">
+            <form method="post" action="/settings/keywords/update">
+              <input type="hidden" name="keyword_kb_enabled" value="false" />
+              <div class="form-group">
+                <label style="display:flex; align-items:center; gap:10px; cursor:pointer;">
+                  <input type="checkbox" name="keyword_kb_enabled" value="true" {% if global_config.keyword_kb_enabled %}checked{% endif %} />
+                  Enable Expanded Interests learning
+                </label>
+              </div>
+              <div class="row" style="gap: 15px; flex-wrap: wrap;">
+                <div class="form-group" style="flex: 1; min-width: 150px;">
+                  <label for="keyword_expand_limit">Expand Limit</label>
+                  <input type="number" id="keyword_expand_limit" name="keyword_expand_limit" min="1" value="{{ global_config.keyword_expand_limit }}" />
+                </div>
+                <div class="form-group" style="flex: 1; min-width: 150px;">
+                  <label for="keyword_max_new_terms_per_run">Max New Terms/Run</label>
+                  <input type="number" id="keyword_max_new_terms_per_run" name="keyword_max_new_terms_per_run" min="1" value="{{ global_config.keyword_max_new_terms_per_run }}" />
+                </div>
+                <div class="form-group" style="flex: 1; min-width: 150px;">
+                  <label for="recency_window_days">Recency Window (days)</label>
+                  <input type="number" id="recency_window_days" name="recency_window_days" min="1" value="{{ global_config.recency_window_days }}" />
+                </div>
+              </div>
+              <div class="row" style="gap: 15px; flex-wrap: wrap; margin-top: 15px;">
+                <div class="form-group" style="flex: 1; min-width: 200px;">
+                  <label for="summary_language">Summary Language</label>
+                  <select id="summary_language" name="summary_language">
+                    <option value="en" {% if global_config.summary_language == "en" %}selected{% endif %}>English</option>
+                    <option value="zh" {% if global_config.summary_language == "zh" %}selected{% endif %}>中文</option>
+                  </select>
+                </div>
+                <div class="form-group" style="flex: 1; min-width: 200px;">
+                  <label for="summary_max_chars">Max Chars</label>
+                  <input type="number" id="summary_max_chars" name="summary_max_chars" min="80" value="{{ global_config.summary_max_chars }}" />
+                </div>
+              </div>
+              <div class="form-group" style="margin-top: 15px;">
+                <label for="keyword_whitelist_csv">Whitelist (comma-separated)</label>
+                <input type="text" id="keyword_whitelist_csv" name="keyword_whitelist_csv" value="{{ global_config.keyword_whitelist | join(', ') }}" />
+              </div>
+              <div class="form-group">
+                <label for="keyword_blacklist_csv">Blacklist (comma-separated)</label>
+                <input type="text" id="keyword_blacklist_csv" name="keyword_blacklist_csv" value="{{ global_config.keyword_blacklist | join(', ') }}" />
+              </div>
+              <button type="submit">Save Expanded Interests Settings</button>
+            </form>
+          </div>
+        </div>
+
+        <!-- Expanded Interests Manager -->
+        <div class="collapsible-section">
+          <button type="button" class="section-toggle" onclick="toggleSection(this)">
+            <span>Expanded Interests Manager</span>
+          </button>
+          <div class="section-content collapsed">
+            <div class="form-group">
+              <label for="ei_manager_user_id">Select User</label>
+              <select id="ei_manager_user_id" onchange="loadExpandedInterests()">
                 {% for user in users %}
                   <option value="{{ user }}">{{ user }}</option>
                 {% endfor %}
               </select>
             </div>
-            <button type="submit" id="run-btn">Initialize Pipeline</button>
-          </form>
-        </div>
-
-        <div class="section">
-          <h2>Auto Scheduler Control</h2>
-          <div class="form-group">
-            <div id="scheduler-status" style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;">
-              <span class="status-badge status-inactive" id="scheduler-status-badge">Stopped</span>
-              <span id="scheduler-last-run">Last run: never</span>
+            <div class="form-group">
+              <label>Current Expanded Interests (<span id="ei-count">0</span> terms)</label>
+              <div id="ei-list" class="chips" style="min-height: 40px; padding: 10px; border: 1px solid var(--card-border); border-radius: 8px; background: var(--summary-bg);">
+                <span class="empty-state" style="padding: 10px;">Loading...</span>
+              </div>
+            </div>
+            <div class="form-group">
+              <label>Add New Term</label>
+              <div class="row" style="gap: 10px;">
+                <input type="text" id="ei-new-term" placeholder="Enter term (e.g., deep reinforcement learning)" style="flex: 1;" />
+                <input type="number" id="ei-new-score" placeholder="Score" value="1.0" step="0.1" min="0" max="10" style="width: 80px;" />
+                <button type="button" onclick="addExpandedInterest()">Add</button>
+              </div>
             </div>
             <div class="inline-note">
-              Scheduler automatically runs pipeline based on each user's "Synchronization Cycle" setting (hourly/daily/weekly).
-              Check interval: 5 minutes.
+              <strong>Tips:</strong> Higher score = higher priority. Click the X on any chip to remove it.
             </div>
-          </div>
-          <div class="row" style="gap: 10px;">
-            <button type="button" id="scheduler-start-btn" onclick="toggleScheduler(true)" style="flex: 1;">Start Scheduler</button>
-            <button type="button" id="scheduler-stop-btn" onclick="toggleScheduler(false)" style="flex: 1;" disabled>Stop Scheduler</button>
-            <button type="button" id="scheduler-run-now-btn" onclick="schedulerRunNow()" style="flex: 1;">Run Now</button>
           </div>
         </div>
 
-        <div class="section">
-          <h2>Auto Query Strategy</h2>
-          <form method="post" action="/settings/query/update">
-            <input type="hidden" name="auto_query_from_interests" value="false" />
-            <div class="form-group">
-              <label style="display:flex; align-items:center; gap:10px; cursor:pointer;">
-                <input
-                  type="checkbox"
-                  name="auto_query_from_interests"
-                  value="true"
-                  {% if global_config.auto_query_from_interests %}checked{% endif %}
-                />
-                Enable auto query from user interests
-              </label>
-              <div class="inline-note">关闭后将只使用手写 search_query。</div>
-            </div>
-
-            <div class="form-group">
-              <label for="auto_query_mode">Auto Query Mode</label>
-              <select id="auto_query_mode" name="auto_query_mode">
-                <option value="merge" {% if global_config.auto_query_mode == "merge" %}selected{% endif %}>merge (手写 + 兴趣词合并)</option>
-                <option value="interests" {% if global_config.auto_query_mode == "interests" %}selected{% endif %}>interests (仅兴趣词)</option>
-                <option value="manual" {% if global_config.auto_query_mode == "manual" %}selected{% endif %}>manual (仅手写 search_query)</option>
-              </select>
-            </div>
-
-            <button type="submit">Save Query Strategy</button>
-          </form>
-        </div>
-
-        <div class="section">
-          <h2>Expanded Interests Control</h2>
-          <form method="post" action="/settings/keywords/update">
-            <input type="hidden" name="keyword_kb_enabled" value="false" />
-
-            <div class="form-group">
-              <label style="display:flex; align-items:center; gap:10px; cursor:pointer;">
-                <input
-                  type="checkbox"
-                  name="keyword_kb_enabled"
-                  value="true"
-                  {% if global_config.keyword_kb_enabled %}checked{% endif %}
-                />
-                Enable Expanded Interests learning
-              </label>
-              <div class="inline-note">Expanded Interests = 用户 interests + 白名单 + 关键词知识库学习项。</div>
-            </div>
-
-            <div class="form-group">
-              <label for="keyword_expand_limit">Expanded Interests Count</label>
-              <input
-                id="keyword_expand_limit"
-                name="keyword_expand_limit"
-                type="text"
-                value="{{ global_config.keyword_expand_limit }}"
-              />
-              <div class="inline-note">控制每轮最多展示/使用多少个 Expanded Interests。</div>
-            </div>
-
-            <div class="form-group">
-              <label for="keyword_max_new_terms_per_run">Max New Learned Terms Per Run</label>
-              <input
-                id="keyword_max_new_terms_per_run"
-                name="keyword_max_new_terms_per_run"
-                type="text"
-                value="{{ global_config.keyword_max_new_terms_per_run }}"
-              />
-            </div>
-
-            <div class="form-group">
-              <label for="recency_window_days">Recency Window (days)</label>
-              <input
-                id="recency_window_days"
-                name="recency_window_days"
-                type="text"
-                value="{{ global_config.recency_window_days }}"
-              />
-              <div class="inline-note">建议设为 60，表示保留最近两个月的论文。</div>
-            </div>
-
-            <div class="form-group">
-              <label for="summary_language">Research Problem/Innovation Language</label>
-              <select id="summary_language" name="summary_language">
-                <option value="en" {% if global_config.summary_language == "en" %}selected{% endif %}>English</option>
-                <option value="zh" {% if global_config.summary_language == "zh" %}selected{% endif %}>中文</option>
-              </select>
-              <div class="inline-note">建议启用 use_llm_summary=true 时使用该语言开关，效果更好。</div>
-            </div>
-
-            <div class="form-group">
-              <label for="summary_max_chars">Research Problem/Innovation Max Chars</label>
-              <input
-                id="summary_max_chars"
-                name="summary_max_chars"
-                type="text"
-                value="{{ global_config.summary_max_chars }}"
-              />
-              <div class="inline-note">用于限制单个字段长度，避免输出过长或混入无关段落。</div>
-            </div>
-
-            <div class="form-group">
-              <label for="keyword_whitelist_csv">Expanded Interests Whitelist (comma-separated)</label>
-              <input
-                id="keyword_whitelist_csv"
-                name="keyword_whitelist_csv"
-                type="text"
-                value="{{ global_config.keyword_whitelist | join(', ') }}"
-                placeholder="limit order book, market microstructure"
-              />
-              <div class="inline-note">白名单会被优先纳入 Expanded Interests。</div>
-            </div>
-
-            <div class="form-group">
-              <label for="keyword_blacklist_csv">Expanded Interests Blacklist (comma-separated)</label>
-              <input
-                id="keyword_blacklist_csv"
-                name="keyword_blacklist_csv"
-                type="text"
-                value="{{ global_config.keyword_blacklist | join(', ') }}"
-                placeholder="survey, tutorial"
-              />
-              <div class="inline-note">黑名单会从学习词与后续扩展中移除。</div>
-            </div>
-
-            <button type="submit">Save Expanded Interests Settings</button>
-          </form>
-        </div>
-
-        <div class="section">
-          <h2>Expanded Interests Manager</h2>
-          <div class="form-group">
-            <label for="ei_manager_user_id">Select User</label>
-            <select id="ei_manager_user_id" onchange="loadExpandedInterests()">
-              {% for user in users %}
-                <option value="{{ user }}">{{ user }}</option>
-              {% endfor %}
-            </select>
-          </div>
-
-          <div class="form-group">
-            <label>Current Expanded Interests (<span id="ei-count">0</span> terms)</label>
-            <div id="ei-list" class="chips" style="min-height: 40px; padding: 10px; border: 1px solid var(--card-border); border-radius: 8px; background: var(--summary-bg);">
-              <span class="empty-state" style="padding: 10px;">Loading...</span>
-            </div>
-          </div>
-
-          <div class="form-group">
-            <label>Add New Term</label>
-            <div class="row" style="gap: 10px;">
-              <input type="text" id="ei-new-term" placeholder="Enter term (e.g., deep reinforcement learning)" style="flex: 1;" />
-              <input type="number" id="ei-new-score" placeholder="Score" value="1.0" step="0.1" min="0" max="10" style="width: 80px;" />
-              <button type="button" onclick="addExpandedInterest()">Add</button>
-            </div>
-          </div>
-
-          <div class="inline-note">
-            <strong>Tips:</strong> Higher score = higher priority. Terms are sorted by score descending.
-            Click the X on any chip to remove it. Changes are saved immediately.
-          </div>
-        </div>
-
-        <div class="section">
-          <h2>Data Sources Configuration</h2>
-          <ul class="source-list">
+        <!-- Data Sources Configuration -->
+        <div class="collapsible-section">
+          <button type="button" class="section-toggle" onclick="toggleSection(this)">
+            <span>Data Sources Configuration</span>
+          </button>
+          <div class="section-content collapsed">
             {% for name, cfg in sources.items() %}
-              <li class="source-item">
-                <div class="source-info">
-                  <span class="source-name">{{ name }}
-                    <span class="status-badge {{ 'status-active' if cfg.enabled else 'status-inactive' }}">
-                      {{ 'Active' if cfg.enabled else 'Inactive' }}
-                    </span>
-                  </span>
-                  <span class="source-meta">Priority: {{ cfg.priority }} &bull; Rate Limit: {{ cfg.rate_limit_per_min }}/min</span>
-                </div>
-                <form method="post" action="/sources/toggle" style="margin: 0;">
-                  <input type="hidden" name="source_name" value="{{ name }}" />
-                  <input type="hidden" name="enabled" value="{{ 'false' if cfg.enabled else 'true' }}" />
-                  <button type="submit" class="small">{{ 'Disable' if cfg.enabled else 'Enable' }}</button>
+            <div class="sub-collapsible">
+              <button type="button" class="sub-toggle" onclick="toggleSubSection(this)">
+                <span>{{ name }} <span class="status-badge {{ 'status-active' if cfg.enabled else 'status-inactive' }}">{{ 'Active' if cfg.enabled else 'Inactive' }}</span></span>
+              </button>
+              <div class="sub-content collapsed">
+                <form onsubmit="return saveSourceSettings(event, '{{ name }}')">
+                  <div class="row" style="gap: 10px; margin-bottom: 12px;">
+                    <form method="post" action="/sources/toggle" style="margin: 0;">
+                      <input type="hidden" name="source_name" value="{{ name }}" />
+                      <input type="hidden" name="enabled" value="{{ 'false' if cfg.enabled else 'true' }}" />
+                      <button type="submit" class="small">{{ 'Disable' if cfg.enabled else 'Enable' }}</button>
+                    </form>
+                  </div>
+                  <div class="source-config-grid">
+                    <div class="form-group">
+                      <label>Priority</label>
+                      <input type="number" name="priority" value="{{ cfg.priority }}" min="1" />
+                    </div>
+                    <div class="form-group">
+                      <label>Rate Limit/min</label>
+                      <input type="number" name="rate_limit_per_min" value="{{ cfg.rate_limit_per_min }}" min="1" />
+                    </div>
+                    <div class="form-group">
+                      <label>Timeout (s)</label>
+                      <input type="number" name="timeout_seconds" value="{{ cfg.timeout_seconds }}" min="1" />
+                    </div>
+                    <div class="form-group">
+                      <label>Retry</label>
+                      <input type="number" name="retry" value="{{ cfg.retry }}" min="0" />
+                    </div>
+                  </div>
+                  <button type="submit" style="margin-top: 12px;">Save {{ name }} Settings</button>
                 </form>
-              </li>
+              </div>
+            </div>
             {% endfor %}
-          </ul>
+          </div>
         </div>
 
-        <div class="section">
-          <h2>User Profile Management</h2>
-          <form method="post" action="/users/update">
-            <div class="form-group">
-              <label for="edit_user_id">Select User Context</label>
-              <select name="user_id" id="edit_user_id">
-                {% for user in users %}
-                  <option value="{{ user }}">{{ user }}</option>
-                {% endfor %}
-              </select>
+        <!-- User Profile Management -->
+        <div class="collapsible-section">
+          <button type="button" class="section-toggle" onclick="toggleSection(this)">
+            <span>User Profile Management</span>
+          </button>
+          <div class="section-content collapsed">
+            {% for user in users_data %}
+            <div class="sub-collapsible">
+              <button type="button" class="sub-toggle" onclick="toggleSubSection(this)">
+                <span>{{ user.user_id }}</span>
+              </button>
+              <div class="sub-content collapsed">
+                <form method="post" action="/users/update">
+                  <input type="hidden" name="user_id" value="{{ user.user_id }}" />
+                  <div class="form-group">
+                    <label>Search Query</label>
+                    <input type="text" name="search_query" value="{{ user.search_query }}" placeholder="Leave empty for auto-generation" />
+                  </div>
+                  <div class="form-group">
+                    <label>Interests (comma-separated)</label>
+                    <input type="text" name="interests_csv" value="{{ user.interests | join(', ') }}" />
+                  </div>
+                  <div class="form-group">
+                    <label>Enabled Sources (comma-separated)</label>
+                    <input type="text" name="enabled_sources_csv" value="{{ user.enabled_sources | join(', ') }}" />
+                  </div>
+                  <div class="row" style="gap: 15px;">
+                    <div class="form-group" style="flex: 1;">
+                      <label>Update Frequency</label>
+                      <select name="update_frequency">
+                        <option value="hourly" {% if user.update_frequency == "hourly" %}selected{% endif %}>Hourly</option>
+                        <option value="daily" {% if user.update_frequency == "daily" %}selected{% endif %}>Daily</option>
+                        <option value="weekly" {% if user.update_frequency == "weekly" %}selected{% endif %}>Weekly</option>
+                      </select>
+                    </div>
+                  </div>
+                  <button type="submit" style="margin-top: 10px;">Save {{ user.user_id }} Profile</button>
+                </form>
+                <hr style="margin: 20px 0; border: none; border-top: 1px solid var(--card-border);">
+                <form onsubmit="return saveUserWeights(event, '{{ user.user_id }}')">
+                  <h4 style="margin-top: 0;">Ranking Weights</h4>
+                  <div class="row" style="gap: 15px;">
+                    <div class="form-group" style="flex: 1;">
+                      <label>Recency Weight (0-1)</label>
+                      <input type="number" name="recency_weight" step="0.1" min="0" max="1" value="{{ user.ranking_weights.recency }}" />
+                    </div>
+                    <div class="form-group" style="flex: 1;">
+                      <label>Relevance Weight (0-1)</label>
+                      <input type="number" name="relevance_weight" step="0.1" min="0" max="1" value="{{ user.ranking_weights.relevance }}" />
+                    </div>
+                  </div>
+                  <button type="submit">Save Weights</button>
+                </form>
+              </div>
             </div>
-
-            <div class="form-group">
-              <label for="search_query">Semantic Search Query (可留空自动生成)</label>
-              <input id="search_query" name="search_query" type="text" placeholder="留空时将根据 interests 自动生成；或手写如 abs: 'order book' AND cat:cs.LG" />
-            </div>
-
-            <div class="form-group">
-              <label for="interests_csv">Research Trajectories (comma-separated)</label>
-              <input id="interests_csv" name="interests_csv" type="text" placeholder="Market Microstructure, Limit Order Book" />
-            </div>
-
-            <div class="form-group">
-              <label for="enabled_sources_csv">Target Providers (comma-separated)</label>
-              <input id="enabled_sources_csv" name="enabled_sources_csv" type="text" placeholder="arxiv, semantic_scholar" />
-            </div>
-
-            <div class="form-group">
-              <label for="update_frequency">Synchronization Cycle</label>
-              <select id="update_frequency" name="update_frequency">
-                <option value="hourly">Hourly</option>
-                <option value="daily" selected>Daily</option>
-                <option value="weekly">Weekly</option>
-              </select>
-            </div>
-
-            <button type="submit" style="margin-top: 10px;">Commit Parameters</button>
-          </form>
+            {% endfor %}
+          </div>
         </div>
+
       </div>
 
       <!-- 第二页：结果论文展示页 -->
@@ -1557,6 +1653,192 @@
       // Allow Enter key to add term
       document.getElementById('ei-new-term')?.addEventListener('keydown', e => {
         if (e.key === 'Enter') addExpandedInterest();
+      });
+
+      // ===========================
+      // 7. Collapsible Sections
+      // ===========================
+      function toggleSection(btn) {
+        btn.classList.toggle('collapsed');
+        const content = btn.nextElementSibling;
+        content.classList.toggle('collapsed');
+        const sectionName = btn.querySelector('span').textContent.trim();
+        const isCollapsed = btn.classList.contains('collapsed');
+        localStorage.setItem('section_' + sectionName, isCollapsed);
+      }
+
+      function toggleSubSection(btn) {
+        btn.classList.toggle('collapsed');
+        const content = btn.nextElementSibling;
+        content.classList.toggle('collapsed');
+      }
+
+      document.addEventListener('DOMContentLoaded', () => {
+        document.querySelectorAll('.section-toggle').forEach(btn => {
+          const sectionName = btn.querySelector('span').textContent.trim();
+          const isCollapsed = localStorage.getItem('section_' + sectionName);
+          if (isCollapsed === 'true' && !btn.classList.contains('collapsed')) {
+            btn.classList.add('collapsed');
+            btn.nextElementSibling.classList.add('collapsed');
+          } else if (isCollapsed === 'false' && btn.classList.contains('collapsed')) {
+            btn.classList.remove('collapsed');
+            btn.nextElementSibling.classList.remove('collapsed');
+          }
+        });
+      });
+
+      // ===========================
+      // 8. Global Settings Save
+      // ===========================
+      async function saveGlobalSettings(e) {
+        e.preventDefault();
+        const body = new URLSearchParams({
+          ranking_threshold: document.getElementById('gr_ranking_threshold').value,
+          min_relevance_ratio: document.getElementById('gr_min_relevance_ratio').value,
+          discovery_limit_per_source: document.getElementById('gr_discovery_limit_per_source').value,
+          summary_limit: document.getElementById('gr_summary_limit').value,
+          max_concurrent_tasks: document.getElementById('gr_max_concurrent_tasks').value,
+          use_llm_summary: document.getElementById('gr_use_llm_summary').checked ? 'true' : 'false',
+          use_cross_encoder: document.getElementById('gr_use_cross_encoder').checked ? 'true' : 'false',
+        });
+        try {
+          const res = await fetch('/settings/global/update', {method: 'POST', body});
+          if (res.ok) {
+            alert('Global settings saved!');
+          } else {
+            alert('Failed to save settings');
+          }
+        } catch (err) {
+          alert('Error: ' + err.message);
+        }
+        return false;
+      }
+
+      async function saveParserSettings(e) {
+        e.preventDefault();
+        const body = new URLSearchParams({
+          parser_backend: document.getElementById('parser_backend').value,
+          parser_device: document.getElementById('parser_device').value,
+          parser_max_pages: document.getElementById('parser_max_pages').value,
+        });
+        try {
+          const res = await fetch('/settings/global/update', {method: 'POST', body});
+          if (res.ok) {
+            alert('Parser settings saved!');
+          } else {
+            alert('Failed to save settings');
+          }
+        } catch (err) {
+          alert('Error: ' + err.message);
+        }
+        return false;
+      }
+
+      async function saveSourceSettings(e, sourceName) {
+        e.preventDefault();
+        const form = e.target;
+        const body = new URLSearchParams({
+          source_name: sourceName,
+          priority: form.priority.value,
+          rate_limit_per_min: form.rate_limit_per_min.value,
+          timeout_seconds: form.timeout_seconds.value,
+          retry: form.retry.value,
+        });
+        try {
+          const res = await fetch('/settings/source/update', {method: 'POST', body});
+          if (res.ok) {
+            alert(sourceName + ' settings saved!');
+          } else {
+            alert('Failed to save settings');
+          }
+        } catch (err) {
+          alert('Error: ' + err.message);
+        }
+        return false;
+      }
+
+      async function saveUserWeights(e, userId) {
+        e.preventDefault();
+        const form = e.target;
+        const body = new URLSearchParams({
+          user_id: userId,
+          recency_weight: form.recency_weight.value,
+          relevance_weight: form.relevance_weight.value,
+        });
+        try {
+          const res = await fetch('/settings/user/weights/update', {method: 'POST', body});
+          if (res.ok) {
+            alert('Ranking weights saved!');
+          } else {
+            alert('Failed to save weights');
+          }
+        } catch (err) {
+          alert('Error: ' + err.message);
+        }
+        return false;
+      }
+
+      // ===========================
+      // 9. Scheduler Control
+      // ===========================
+      async function toggleScheduler(start) {
+        const endpoint = start ? '/api/scheduler/start' : '/api/scheduler/stop';
+        try {
+          const res = await fetch(endpoint, {method: 'POST'});
+          const data = await res.json();
+          updateSchedulerUI(data);
+        } catch (err) {
+          alert('Error: ' + err.message);
+        }
+      }
+
+      async function schedulerRunNow() {
+        const userId = document.getElementById('user_id').value;
+        try {
+          const res = await fetch('/api/scheduler/run-now', {
+            method: 'POST',
+            body: new URLSearchParams({user_id: userId})
+          });
+          const data = await res.json();
+          alert('Run completed! Found ' + data.total_candidates + ' candidates.');
+        } catch (err) {
+          alert('Error: ' + err.message);
+        }
+      }
+
+      function updateSchedulerUI(data) {
+        const badge = document.getElementById('scheduler-status-badge');
+        const startBtn = document.getElementById('scheduler-start-btn');
+        const stopBtn = document.getElementById('scheduler-stop-btn');
+
+        if (data.enabled || data.status === 'started' || data.status === 'already_running') {
+          badge.textContent = 'Running';
+          badge.className = 'status-badge status-active';
+          startBtn.disabled = true;
+          stopBtn.disabled = false;
+        } else {
+          badge.textContent = 'Stopped';
+          badge.className = 'status-badge status-inactive';
+          startBtn.disabled = false;
+          stopBtn.disabled = true;
+        }
+
+        if (data.last_runs) {
+          const userId = document.getElementById('user_id').value;
+          if (data.last_runs[userId]) {
+            document.getElementById('scheduler-last-run').textContent = 'Last run: ' + new Date(data.last_runs[userId]).toLocaleString();
+          }
+        }
+      }
+
+      document.addEventListener('DOMContentLoaded', async () => {
+        try {
+          const res = await fetch('/api/scheduler/status');
+          const data = await res.json();
+          updateSchedulerUI(data);
+        } catch (err) {
+          console.error('Failed to load scheduler status:', err);
+        }
       });
     </script>
   </body>
