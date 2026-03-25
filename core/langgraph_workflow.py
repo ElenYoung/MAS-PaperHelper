@@ -11,6 +11,7 @@ from core.agents.ranking_agent import RankingAgent
 from core.agents.summary_agent import SummaryAgent
 from core.config import AppConfig, UserConfig
 from core.database.factory import create_repository
+from core.intelligent_search import IntelligentSearchPipeline
 from core.keyword_kb import KeywordKnowledgeBase
 from core.models import PaperCandidate, PaperSummary, WorkflowResult
 from core.tools.download import DownloadTool
@@ -116,12 +117,49 @@ def compile_workflow_graph() -> Any:
 
         runtime_user = state["user"].model_copy(update={"interests": expanded_interests})
 
-        agent = DiscoveryAgent(source_registry=state["source_registry"])
-        candidates, sources_used, effective_query = agent.run(
-            app_config=state["app_config"],
-            user=runtime_user,
-            limit_per_source=state["limit_per_source"],
-        )
+        # Check if LLM-enhanced search is enabled
+        if state["app_config"].global_config.llm_search_enabled:
+            # Use Intelligent Search Pipeline
+            pipeline = IntelligentSearchPipeline(
+                app_config=state["app_config"],
+                source_registry=state["source_registry"],
+                llm_model=state["app_config"].global_config.llm_analysis_model or None,
+                llm_api_base=state["app_config"].global_config.llm_api_base,
+                user_config=state["user"],
+            )
+
+            if pipeline.is_available():
+                # Use higher limit for LLM filtering
+                discovery_limit = max(state["limit_per_source"], 30)
+
+                candidates, sources_used, effective_query, analyses = pipeline.search(
+                    user=runtime_user,
+                    limit_per_source=discovery_limit,
+                    relevance_threshold=state["app_config"].global_config.llm_relevance_threshold,
+                    batch_size=state["app_config"].global_config.llm_analysis_batch_size,
+                )
+
+                # Attach LLM analysis metadata to candidates
+                for candidate in candidates:
+                    if hasattr(candidate, "llm_relevance_score"):
+                        # Already attached in pipeline
+                        pass
+            else:
+                # Fallback to simple search if pipeline not available
+                agent = DiscoveryAgent(source_registry=state["source_registry"])
+                candidates, sources_used, effective_query = agent.run(
+                    app_config=state["app_config"],
+                    user=runtime_user,
+                    limit_per_source=state["limit_per_source"],
+                )
+        else:
+            # Use original simple search (fallback)
+            agent = DiscoveryAgent(source_registry=state["source_registry"])
+            candidates, sources_used, effective_query = agent.run(
+                app_config=state["app_config"],
+                user=runtime_user,
+                limit_per_source=state["limit_per_source"],
+            )
 
         repo = state.get("repository")
         if repo:

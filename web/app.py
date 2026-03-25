@@ -426,6 +426,9 @@ def update_global_settings(
     summary_limit: str = Form("50"),
     discovery_limit_per_source: str = Form("8"),
     use_llm_summary: str = Form("true"),
+    llm_search_enabled: str = Form("false"),
+    llm_relevance_threshold: str = Form("0.6"),
+    llm_analysis_batch_size: str = Form("12"),
     parser_backend: str = Form("pypdf"),
     parser_max_pages: str = Form("15"),
     parser_device: str = Form("cpu"),
@@ -457,6 +460,16 @@ def update_global_settings(
         pass
 
     app_config.global_config.use_llm_summary = use_llm_summary == "true"
+    app_config.global_config.llm_search_enabled = llm_search_enabled == "true"
+
+    try:
+        app_config.global_config.llm_relevance_threshold = max(0.0, min(1.0, float(llm_relevance_threshold)))
+    except ValueError:
+        pass
+    try:
+        app_config.global_config.llm_analysis_batch_size = max(1, int(llm_analysis_batch_size))
+    except ValueError:
+        pass
 
     if parser_backend in {"pypdf", "docling"}:
         app_config.global_config.parser_backend = parser_backend

@@ -15,9 +15,9 @@ global:
   use_llm_summary: true
   llm_api_base: ${MAS_LLM_API_BASE:-}
   llm_api_key_env: ${MAS_LLM_API_KEY_ENV:-OPENAI_API_KEY}
-  parser_backend: docling
+  parser_backend: pypdf
   parser_max_pages: 15
-  parser_device: cuda
+  parser_device: cpu
   use_cross_encoder: false
   cross_encoder_model: cross-encoder/ms-marco-MiniLM-L-6-v2
   auto_query_from_interests: true
@@ -43,6 +43,13 @@ global:
   - machine learning
   - time series forecasting
   keyword_blacklist: []
+  llm_search_enabled: true
+  llm_relevance_threshold: 0.5
+  llm_analysis_batch_size: 8
+  llm_analysis_model: ''
+  query_expansion_enabled: true
+  query_expansion_max_keywords: 5
+  llm_strict_mode: false
 database:
   backend: sqlite
   sqlite_path: data/app.db

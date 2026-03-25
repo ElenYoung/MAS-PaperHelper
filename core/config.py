@@ -64,6 +64,15 @@ class GlobalConfig(BaseModel):
     keyword_whitelist: list[str] = Field(default_factory=list)
     keyword_blacklist: list[str] = Field(default_factory=list)
 
+    # LLM-enhanced search configuration
+    llm_search_enabled: bool = False  # 总开关：是否启用LLM增强搜索
+    llm_relevance_threshold: float = 0.6  # 相关性阈值，低于此值过滤
+    llm_analysis_batch_size: int = 12  # LLM相关性分析批大小
+    llm_analysis_model: str = ""  # 可选：指定专用模型（如轻量级模型），空则使用base_model
+    query_expansion_enabled: bool = True  # 是否启用查询扩展
+    query_expansion_max_keywords: int = 5  # 每个兴趣扩展的最大关键词数
+    llm_strict_mode: bool = False  # true=只保留high confidence匹配，false=medium+保留
+
 
 class DatabaseConfig(BaseModel):
     backend: str = "sqlite"

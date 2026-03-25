@@ -927,6 +927,27 @@
                 </div>
               </div>
 
+              <!-- LLM Enhanced Search Settings -->
+              <div class="row" style="gap: 15px; flex-wrap: wrap; margin-top: 15px;">
+                <div class="form-group" style="flex: 1; min-width: 200px;">
+                  <label style="display:flex; align-items:center; gap:10px; cursor:pointer;">
+                    <input type="checkbox" id="gr_llm_search_enabled" {% if global_config.llm_search_enabled %}checked{% endif %} />
+                    Enable LLM Enhanced Search
+                  </label>
+                  <div class="inline-note">Use LLM for query expansion and semantic relevance verification</div>
+                </div>
+                <div class="form-group" style="flex: 1; min-width: 200px;">
+                  <label for="gr_llm_relevance_threshold">Relevance Threshold (0-1)</label>
+                  <input type="number" id="gr_llm_relevance_threshold" step="0.1" min="0" max="1" value="{{ global_config.llm_relevance_threshold }}" />
+                  <div class="inline-note">Papers below this score are filtered by LLM (lower = more lenient)</div>
+                </div>
+                <div class="form-group" style="flex: 1; min-width: 200px;">
+                  <label for="gr_llm_analysis_batch_size">Analysis Batch Size</label>
+                  <input type="number" id="gr_llm_analysis_batch_size" min="1" max="50" value="{{ global_config.llm_analysis_batch_size }}" />
+                  <div class="inline-note">Number of papers per LLM batch analysis (1-50)</div>
+                </div>
+              </div>
+
               <button type="submit" style="margin-top: 15px;">Save Global Settings</button>
             </form>
           </div>
@@ -1721,6 +1742,9 @@
           max_concurrent_tasks: document.getElementById('gr_max_concurrent_tasks').value,
           use_llm_summary: document.getElementById('gr_use_llm_summary').checked ? 'true' : 'false',
           use_cross_encoder: document.getElementById('gr_use_cross_encoder').checked ? 'true' : 'false',
+          llm_search_enabled: document.getElementById('gr_llm_search_enabled').checked ? 'true' : 'false',
+          llm_relevance_threshold: document.getElementById('gr_llm_relevance_threshold').value,
+          llm_analysis_batch_size: document.getElementById('gr_llm_analysis_batch_size').value,
         });
         try {
           const res = await fetch('/settings/global/update', {method: 'POST', body});
