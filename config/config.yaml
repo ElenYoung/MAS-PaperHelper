@@ -5,8 +5,8 @@ global:
   base_model_api_base: ${MAS_BASE_MODEL_API_BASE:-http://127.0.0.1:8000/v1}
   embedding_api_base: ${MAS_EMBEDDING_API_BASE:-http://127.0.0.1:8001/v1}
   max_concurrent_tasks: 5
-  ranking_threshold: 5.0
-  min_relevance_ratio: 0.05
+  ranking_threshold: 4.0
+  min_relevance_ratio: 0.04
   recency_window_days: 120
   summary_language: en
   summary_max_chars: 1000
@@ -44,7 +44,7 @@ global:
   - time series forecasting
   keyword_blacklist: []
   llm_search_enabled: true
-  llm_relevance_threshold: 0.5
+  llm_relevance_threshold: 0.3
   llm_analysis_batch_size: 8
   llm_analysis_model: ''
   query_expansion_enabled: true
