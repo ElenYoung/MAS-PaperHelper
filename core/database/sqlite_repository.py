@@ -168,6 +168,9 @@ class SqliteRepository:
             "summaries": summaries,
             "created_at": created_at,
         }
+
+    def get_seen_paper_ids(self, user_id: str) -> set[str]:
+        """Get the set of paper IDs already seen by a user."""
         rows = self._conn.execute(
             "SELECT paper_id FROM seen_papers WHERE user_id = ?", (user_id,)
         ).fetchall()

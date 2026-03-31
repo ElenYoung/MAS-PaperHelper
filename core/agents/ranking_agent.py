@@ -4,7 +4,7 @@ import re
 from datetime import datetime, timezone
 
 from core.agents.base import AgentBase
-from core.config import UserConfig
+from core.config import RankingWeights, UserConfig
 from core.models import PaperCandidate
 
 
@@ -16,10 +16,12 @@ class RankingAgent(AgentBase):
         threshold: float = 4.0,
         min_relevance_ratio: float = 0.05,
         recency_window_days: int = 90,
+        ranking_weights: RankingWeights | None = None,
     ) -> None:
         self.threshold = threshold
         self.min_relevance_ratio = min_relevance_ratio
         self.recency_window_days = max(1, int(recency_window_days))
+        self.ranking_weights = ranking_weights or RankingWeights()
 
     def run(self, user: UserConfig, candidates: list[PaperCandidate]) -> list[PaperCandidate]:
         ranked: list[PaperCandidate] = []
@@ -125,7 +127,7 @@ class RankingAgent(AgentBase):
 
         candidate.relevance_score = round(relevance, 4)
         candidate.recency_score = round(recency, 4)
-        score = user.ranking_weights.relevance * relevance + user.ranking_weights.recency * recency
+        score = self.ranking_weights.relevance * relevance + self.ranking_weights.recency * recency
         return round(score * 10, 2)
 
     @staticmethod

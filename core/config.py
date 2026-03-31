@@ -63,6 +63,7 @@ class GlobalConfig(BaseModel):
     keyword_max_new_terms_per_run: int = 20
     keyword_whitelist: list[str] = Field(default_factory=list)
     keyword_blacklist: list[str] = Field(default_factory=list)
+    keyword_llm_extraction: bool = True  # 是否使用LLM智能提取关键词
 
     # LLM-enhanced search configuration
     llm_search_enabled: bool = False  # 总开关：是否启用LLM增强搜索
@@ -72,6 +73,9 @@ class GlobalConfig(BaseModel):
     query_expansion_enabled: bool = True  # 是否启用查询扩展
     query_expansion_max_keywords: int = 5  # 每个兴趣扩展的最大关键词数
     llm_strict_mode: bool = False  # true=只保留high confidence匹配，false=medium+保留
+
+    # Ranking weights (global default)
+    ranking_weights: RankingWeights = Field(default_factory=RankingWeights)
 
 
 class DatabaseConfig(BaseModel):

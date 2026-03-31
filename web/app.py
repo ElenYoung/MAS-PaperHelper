@@ -351,6 +351,7 @@ def update_query_settings(
 def update_keyword_settings(
     request: Request,
     keyword_kb_enabled: str = Form("false"),
+    keyword_llm_extraction: str = Form("true"),
     keyword_expand_limit: str = Form("10"),
     keyword_max_new_terms_per_run: str = Form("20"),
     recency_window_days: str = Form("60"),
@@ -366,6 +367,7 @@ def update_keyword_settings(
     blacklist = [item.strip() for item in keyword_blacklist_csv.split(",") if item.strip()]
 
     app_config.global_config.keyword_kb_enabled = keyword_kb_enabled == "true"
+    app_config.global_config.keyword_llm_extraction = keyword_llm_extraction == "true"
     try:
         app_config.global_config.keyword_expand_limit = max(1, int(keyword_expand_limit))
     except ValueError:
@@ -411,7 +413,7 @@ def api_get_expanded_interests(user_id: str = Query(...)) -> JSONResponse:
     """Get expanded interests for a user from keyword knowledge base."""
     app_config = load_config()
     kb_path = app_config.global_config.keyword_kb_path
-    kb = KeywordKnowledgeBase(path=kb_path)
+    kb = KeywordKnowledgeBase(path=kb_path, global_config=app_config.global_config)
     data = kb._load()
     user_data = data.get("users", {}).get(user_id, {})
     terms = user_data.get("terms", {})
@@ -429,7 +431,7 @@ def api_add_expanded_interest(user_id: str = Form(...), term: str = Form(...), s
     """Add or update a term in expanded interests."""
     app_config = load_config()
     kb_path = app_config.global_config.keyword_kb_path
-    kb = KeywordKnowledgeBase(path=kb_path)
+    kb = KeywordKnowledgeBase(path=kb_path, global_config=app_config.global_config)
     data = kb._load()
     users = data.setdefault("users", {})
     bucket = users.setdefault(user_id, {"terms": {}, "related_domains": {}, "updated_at": ""})
@@ -445,7 +447,7 @@ def api_remove_expanded_interest(user_id: str = Form(...), term: str = Form(...)
     """Remove a term from expanded interests."""
     app_config = load_config()
     kb_path = app_config.global_config.keyword_kb_path
-    kb = KeywordKnowledgeBase(path=kb_path)
+    kb = KeywordKnowledgeBase(path=kb_path, global_config=app_config.global_config)
     data = kb._load()
     user_data = data.get("users", {}).get(user_id, {})
     terms = user_data.get("terms", {})
@@ -473,8 +475,12 @@ def update_global_settings(
     parser_device: str = Form("cpu"),
     use_cross_encoder: str = Form("false"),
     cross_encoder_model: str = Form("cross-encoder/ms-marco-MiniLM-L-6-v2"),
+    recency_weight: str = Form("0.5"),
+    relevance_weight: str = Form("0.5"),
 ) -> JSONResponse:
     """Update global runtime settings."""
+    from core.config import RankingWeights
+
     app_config = load_config()
 
     try:
@@ -509,6 +515,17 @@ def update_global_settings(
         app_config.global_config.llm_analysis_batch_size = max(1, int(llm_analysis_batch_size))
     except ValueError:
         pass
+
+    # Update ranking weights
+    try:
+        recency = max(0.0, min(1.0, float(recency_weight)))
+    except ValueError:
+        recency = app_config.global_config.ranking_weights.recency
+    try:
+        relevance = max(0.0, min(1.0, float(relevance_weight)))
+    except ValueError:
+        relevance = app_config.global_config.ranking_weights.relevance
+    app_config.global_config.ranking_weights = RankingWeights(recency=recency, relevance=relevance)
 
     if parser_backend in {"pypdf", "docling"}:
         app_config.global_config.parser_backend = parser_backend
@@ -571,18 +588,22 @@ def update_user_weights(
     relevance_weight: str = Form("0.8"),
 ) -> JSONResponse:
     """Update user ranking weights."""
+    from core.config import RankingWeights
+
     app_config = load_config()
 
     for user in app_config.users:
         if user.user_id == user_id:
             try:
-                user.ranking_weights["recency"] = max(0.0, min(1.0, float(recency_weight)))
+                recency = max(0.0, min(1.0, float(recency_weight)))
             except ValueError:
-                pass
+                recency = user.ranking_weights.recency
             try:
-                user.ranking_weights["relevance"] = max(0.0, min(1.0, float(relevance_weight)))
+                relevance = max(0.0, min(1.0, float(relevance_weight)))
             except ValueError:
-                pass
+                relevance = user.ranking_weights.relevance
+            # Create new RankingWeights object instead of item assignment
+            user.ranking_weights = RankingWeights(recency=recency, relevance=relevance)
             break
 
     save_config(app_config)

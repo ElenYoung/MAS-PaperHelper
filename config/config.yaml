@@ -7,7 +7,7 @@ global:
   max_concurrent_tasks: 5
   ranking_threshold: 4.0
   min_relevance_ratio: 0.04
-  recency_window_days: 120
+  recency_window_days: 300
   summary_language: en
   summary_max_chars: 1000
   summary_limit: 50
@@ -50,6 +50,9 @@ global:
   query_expansion_enabled: true
   query_expansion_max_keywords: 5
   llm_strict_mode: false
+  ranking_weights:
+    recency: 0.1
+    relevance: 0.9
 database:
   backend: sqlite
   sqlite_path: data/app.db
@@ -85,6 +88,8 @@ sources:
 users:
 - user_id: quant
   interests:
+  - MAS
+  - Agent
   - quantitative trading
   - market microstructure
   - high frequency trading

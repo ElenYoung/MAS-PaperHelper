@@ -948,6 +948,20 @@
                 </div>
               </div>
 
+              <!-- Ranking Weights -->
+              <div class="row" style="gap: 15px; flex-wrap: wrap; margin-top: 15px;">
+                <div class="form-group" style="flex: 1; min-width: 200px;">
+                  <label for="gr_recency_weight">Recency Weight (0-1)</label>
+                  <input type="number" id="gr_recency_weight" step="0.1" min="0" max="1" value="{{ global_config.ranking_weights.recency }}" />
+                  <div class="inline-note">Weight for recency in ranking (higher = prefer newer papers)</div>
+                </div>
+                <div class="form-group" style="flex: 1; min-width: 200px;">
+                  <label for="gr_relevance_weight">Relevance Weight (0-1)</label>
+                  <input type="number" id="gr_relevance_weight" step="0.1" min="0" max="1" value="{{ global_config.ranking_weights.relevance }}" />
+                  <div class="inline-note">Weight for relevance in ranking (higher = prefer topic match)</div>
+                </div>
+              </div>
+
               <button type="submit" style="margin-top: 15px;">Save Global Settings</button>
             </form>
           </div>
@@ -1021,11 +1035,19 @@
           <div class="section-content collapsed">
             <form method="post" action="/settings/keywords/update">
               <input type="hidden" name="keyword_kb_enabled" value="false" />
+              <input type="hidden" name="keyword_llm_extraction" value="false" />
               <div class="form-group">
                 <label style="display:flex; align-items:center; gap:10px; cursor:pointer;">
                   <input type="checkbox" name="keyword_kb_enabled" value="true" {% if global_config.keyword_kb_enabled %}checked{% endif %} />
                   Enable Expanded Interests learning
                 </label>
+              </div>
+              <div class="form-group">
+                <label style="display:flex; align-items:center; gap:10px; cursor:pointer;">
+                  <input type="checkbox" name="keyword_llm_extraction" value="true" {% if global_config.keyword_llm_extraction %}checked{% endif %} />
+                  Use LLM for intelligent keyword extraction
+                </label>
+                <div class="inline-note">When enabled, uses AI to extract domain-relevant keywords. When disabled, uses simple word frequency.</div>
               </div>
               <div class="row" style="gap: 15px; flex-wrap: wrap;">
                 <div class="form-group" style="flex: 1; min-width: 150px;">
@@ -1186,21 +1208,6 @@
                     </div>
                   </div>
                   <button type="submit" style="margin-top: 10px;">Save {{ user.user_id }} Profile</button>
-                </form>
-                <hr style="margin: 20px 0; border: none; border-top: 1px solid var(--card-border);">
-                <form onsubmit="return saveUserWeights(event, '{{ user.user_id }}')">
-                  <h4 style="margin-top: 0;">Ranking Weights</h4>
-                  <div class="row" style="gap: 15px;">
-                    <div class="form-group" style="flex: 1;">
-                      <label>Recency Weight (0-1)</label>
-                      <input type="number" name="recency_weight" step="0.1" min="0" max="1" value="{{ user.ranking_weights.recency }}" />
-                    </div>
-                    <div class="form-group" style="flex: 1;">
-                      <label>Relevance Weight (0-1)</label>
-                      <input type="number" name="relevance_weight" step="0.1" min="0" max="1" value="{{ user.ranking_weights.relevance }}" />
-                    </div>
-                  </div>
-                  <button type="submit">Save Weights</button>
                 </form>
               </div>
             </div>
@@ -1514,21 +1521,28 @@
       // 5. Pipeline 异步执行 + Loading Overlay
       // ===========================
       function runPipeline(e) {
+        console.log('runPipeline called');
         e.preventDefault();
         const overlay = document.getElementById('loading-overlay');
         overlay.style.display = 'flex';
         document.getElementById('run-btn').disabled = true;
         const userId = document.getElementById('user_id').value;
+        console.log('Sending request for user:', userId);
         const body = new URLSearchParams({user_id: userId});
         fetch('/api/run', {method: 'POST', body})
-          .then(r => r.json())
+          .then(r => {
+            console.log('Response received:', r.status);
+            return r.json();
+          })
           .then(data => {
+            console.log('Data received:', data);
             overlay.style.display = 'none';
             document.getElementById('run-btn').disabled = false;
             renderResult(data);
             switchTab('page-results');
           })
-          .catch(() => {
+          .catch((err) => {
+            console.error('Error:', err);
             overlay.style.display = 'none';
             document.getElementById('run-btn').disabled = false;
             alert('Pipeline 执行失败，请检查后端日志。');
@@ -1745,6 +1759,8 @@
           llm_search_enabled: document.getElementById('gr_llm_search_enabled').checked ? 'true' : 'false',
           llm_relevance_threshold: document.getElementById('gr_llm_relevance_threshold').value,
           llm_analysis_batch_size: document.getElementById('gr_llm_analysis_batch_size').value,
+          recency_weight: document.getElementById('gr_recency_weight').value,
+          relevance_weight: document.getElementById('gr_relevance_weight').value,
         });
         try {
           const res = await fetch('/settings/global/update', {method: 'POST', body});
@@ -1795,27 +1811,6 @@
             alert(sourceName + ' settings saved!');
           } else {
             alert('Failed to save settings');
-          }
-        } catch (err) {
-          alert('Error: ' + err.message);
-        }
-        return false;
-      }
-
-      async function saveUserWeights(e, userId) {
-        e.preventDefault();
-        const form = e.target;
-        const body = new URLSearchParams({
-          user_id: userId,
-          recency_weight: form.recency_weight.value,
-          relevance_weight: form.relevance_weight.value,
-        });
-        try {
-          const res = await fetch('/settings/user/weights/update', {method: 'POST', body});
-          if (res.ok) {
-            alert('Ranking weights saved!');
-          } else {
-            alert('Failed to save weights');
           }
         } catch (err) {
           alert('Error: ' + err.message);

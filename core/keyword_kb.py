@@ -4,14 +4,23 @@ import json
 import re
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from core.models import PaperCandidate
 
+if TYPE_CHECKING:
+    from core.config import GlobalConfig
+
 
 class KeywordKnowledgeBase:
-    def __init__(self, path: str = "data/keyword_kb.json") -> None:
+    def __init__(
+        self,
+        path: str = "data/keyword_kb.json",
+        global_config: GlobalConfig | None = None,
+    ) -> None:
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
+        self.global_config = global_config
 
     def expand_interests(
         self,
@@ -98,11 +107,6 @@ class KeywordKnowledgeBase:
         terms: dict[str, float] = bucket.setdefault("terms", {})
         domains: dict[str, float] = bucket.setdefault("related_domains", {})
 
-        text_blob = "\n".join(f"{p.title}. {p.abstract}" for p in papers)
-        extracted = self._extract_terms(text_blob)
-        if not extracted:
-            return
-
         deny = {self._normalize_phrase(x) for x in (blacklist or []) if self._normalize_phrase(x)}
         allow_raw = [x.strip() for x in (whitelist or []) if x.strip()]
         allow = {self._normalize_phrase(x) for x in allow_raw if self._normalize_phrase(x)}
@@ -115,14 +119,27 @@ class KeywordKnowledgeBase:
             }
             terms = bucket["terms"]
 
+        # Use intelligent LLM-based extraction if global_config is available and enabled
+        if self.global_config and getattr(self.global_config, "keyword_llm_extraction", True):
+            extracted_terms = self._extract_terms_intelligent(
+                papers=papers,
+                seed_interests=seed_interests,
+                max_terms=max_new_terms,
+                whitelist=whitelist,
+                blacklist=blacklist,
+            )
+        else:
+            # Fallback to mechanical extraction
+            extracted_terms = self._extract_terms_mechanical(papers, max_new_terms, deny, allow)
+
+        # Merge extracted terms into knowledge base
         seed_set = {
             self._normalize_phrase(item)
             for item in seed_interests
             if self._normalize_phrase(item)
         }
 
-        count = 0
-        for term, weight in extracted:
+        for term, weight in extracted_terms:
             key = self._normalize_phrase(term)
             if not key:
                 continue
@@ -133,9 +150,6 @@ class KeywordKnowledgeBase:
             if allow and key not in allow and not any(a in key or key in a for a in allow):
                 continue
             terms[term] = round(float(terms.get(term, 0.0)) + float(weight), 4)
-            count += 1
-            if count >= max_new_terms:
-                break
 
         for raw in allow_raw:
             key = self._normalize_phrase(raw)
@@ -149,6 +163,71 @@ class KeywordKnowledgeBase:
 
         bucket["updated_at"] = datetime.now(timezone.utc).isoformat()
         self._save(data)
+
+    def _extract_terms_intelligent(
+        self,
+        papers: list[PaperCandidate],
+        seed_interests: list[str],
+        max_terms: int,
+        whitelist: list[str] | None,
+        blacklist: list[str] | None,
+    ) -> list[tuple[str, float]]:
+        """Use LLM-based intelligent extraction."""
+        from core.agents.keyword_extraction_agent import IntelligentKeywordAgent
+
+        agent = IntelligentKeywordAgent(global_config=self.global_config)
+
+        papers_content = [(p.title, p.abstract) for p in papers if p.abstract]
+
+        result = agent.extract_keywords(
+            user_interests=seed_interests,
+            papers_content=papers_content,
+            max_keywords=max(max_terms, 15),  # Ask for more to allow filtering
+            whitelist=whitelist,
+            blacklist=blacklist,
+        )
+
+        existing_terms = list(self._load().get("users", {}).get("", {}).get("terms", {}).keys())
+
+        filtered = agent.filter_and_rank_keywords(
+            extraction_result=result,
+            existing_terms=existing_terms,
+            min_relevance=0.4,  # Only keep keywords with decent relevance
+        )
+
+        return filtered[:max_terms]
+
+    def _extract_terms_mechanical(
+        self,
+        papers: list[PaperCandidate],
+        max_terms: int,
+        deny: set[str],
+        allow: set[str],
+    ) -> list[tuple[str, float]]:
+        """Original mechanical extraction as fallback."""
+        text_blob = "\n".join(f"{p.title}. {p.abstract}" for p in papers)
+        extracted = self._extract_terms(text_blob)
+
+        seed_set: set[str] = set()
+
+        count = 0
+        result: list[tuple[str, float]] = []
+        for term, weight in extracted:
+            key = self._normalize_phrase(term)
+            if not key:
+                continue
+            if key in seed_set:
+                continue
+            if self._is_denied_term(key, deny):
+                continue
+            if allow and key not in allow and not any(a in key or key in a for a in allow):
+                continue
+            result.append((term, weight))
+            count += 1
+            if count >= max_terms:
+                break
+
+        return result
 
     def related_domains(self, user_id: str, limit: int = 8) -> list[str]:
         data = self._load()

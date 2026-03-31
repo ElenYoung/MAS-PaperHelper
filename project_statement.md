@@ -128,3 +128,4 @@ users:
 * **用户偏好闭环：** 在本地 UI 中增加“喜欢/不喜欢”按钮。每次点击后，调用一个 `Profile Update Agent` 重新总结用户的兴趣关键词，并写回 `config.yaml`。
 
 您是否希望我为您编写一份基于 **LangGraph** 和 **Ollama** 的 `Discovery Agent` 核心代码原型？
+

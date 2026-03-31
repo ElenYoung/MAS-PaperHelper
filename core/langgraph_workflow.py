@@ -105,7 +105,10 @@ def compile_workflow_graph() -> Any:
         )
 
         if state["app_config"].global_config.keyword_kb_enabled:
-            kb = KeywordKnowledgeBase(path=state["app_config"].global_config.keyword_kb_path)
+            kb = KeywordKnowledgeBase(
+                path=state["app_config"].global_config.keyword_kb_path,
+                global_config=state["app_config"].global_config,
+            )
             expanded_interests = kb.expand_interests(
                 user_id=state["user"].user_id,
                 base_interests=base_interests,
@@ -198,6 +201,7 @@ def compile_workflow_graph() -> Any:
             threshold=state["ranking_threshold"],
             min_relevance_ratio=state["app_config"].global_config.min_relevance_ratio,
             recency_window_days=state["app_config"].global_config.recency_window_days,
+            ranking_weights=state["app_config"].global_config.ranking_weights,
         )
         ranked = agent.run(user=state["user"], candidates=state["candidates"])
         kept = agent.keep(ranked=ranked)
@@ -250,7 +254,10 @@ def compile_workflow_graph() -> Any:
     def kb_update_node(state: WorkflowState) -> dict[str, Any]:
         related_domains = state.get("related_domains", [])
         if state["app_config"].global_config.keyword_kb_enabled:
-            kb = KeywordKnowledgeBase(path=state["app_config"].global_config.keyword_kb_path)
+            kb = KeywordKnowledgeBase(
+                path=state["app_config"].global_config.keyword_kb_path,
+                global_config=state["app_config"].global_config,
+            )
             kb.update_from_papers(
                 user_id=state["user"].user_id,
                 seed_interests=state.get("expanded_interests") or state["user"].interests,
